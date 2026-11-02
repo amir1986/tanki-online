@@ -1,0 +1,27 @@
+{
+  "name": "tanki-online",
+  "version": "0.1.0",
+  "description": "Tanki Online style 3D tank battle desktop game (Electron + three.js + cannon-es)",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "server": "node server/index.mjs",
+    "test": "node --test tests/",
+    "smoke": "electron . --smoke",
+    "dist": "node tools/package.mjs"
+  },
+  "author": "Amir Amsalem",
+  "license": "MIT",
+  "dependencies": {
+    "cannon-es": "^0.20.0",
+    "three": "^0.187.0",
+    "ws": "^8.22.1"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "^45.2.1",
+    "puppeteer-core": "^25.16.0"
+  }
+}
