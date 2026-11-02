@@ -1,0 +1,231 @@
+// App bootstrap: connects to the server, drives screens, the showroom and the battle client.
+import { View } from './render/view.mjs';
+import { FollowCamera } from './render/camera.mjs';
+import { Input } from './input.mjs';
+import { GameAudio } from './audio.mjs';
+import { Net } from './net.mjs';
+import { Screens } from './ui/screens.mjs';
+import { Garage, Showroom } from './ui/garage.mjs';
+import { BattleClient } from './battle.mjs';
+import { C2S } from '/shared/protocol.mjs';
+
+const DEFAULT_SETTINGS = {
+  quality: 'high', scale: 1, shadows: 2, bloom: true, showFps: false,
+  mouseAim: true, sensitivity: 1, invertY: false,
+  volMaster: 0.8, volSfx: 1, volUi: 0.8, volEngine: 0.6,
+};
+const SCREENS = ['screen-login', 'screen-menu', 'screen-lobby', 'screen-create', 'screen-garage', 'screen-settings', 'overlay-pause'];
+
+class App {
+  constructor() {
+    this.canvas = document.getElementById('gl');
+    this.view = new View(this.canvas);
+    this.cam = new FollowCamera(this.view.camera);
+    this.input = new Input(this.canvas);
+    this.audio = new GameAudio();
+    this.net = new Net();
+    this.screens = new Screens(this);
+    this.garage = new Garage(this);
+    this.showroom = new Showroom(this.view);
+    this.profile = null;
+    this.lobbyData = null;
+    this.battle = null;
+    this.dev = false;
+    this.online = 1;
+    this.screen = null;
+    this.paused = false;
+    this.isElectron = !!(window.tanki && window.tanki.isElectron);
+    this.query = new URLSearchParams(location.search);
+    this.autoJoined = false;
+    this.lastFrame = performance.now();
+    this.settingsSendTimer = null;
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem('tanki.settings') || '{}'); } catch (e) { saved = {}; }
+    this.settings = { ...DEFAULT_SETTINGS, ...saved };
+    this.applySettings();
+    this.bindNet();
+    this.input.onAction('pause', () => { if (this.battle && this.paused && this.screen === 'pause') this.closePause(); });
+    const unlock = () => this.audio.init();
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    window.addEventListener('error', (e) => console.error('[tanki] error', e.message));
+    requestAnimationFrame(() => this.loop());
+  }
+
+  $(id) { return document.getElementById(id); }
+  equip() { const p = this.profile; return { hull: p.equipped.hull, turret: p.equipped.turret, paint: p.equipped.paint }; }
+
+  async start() {
+    const text = this.$('loading-text');
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    try {
+      text.textContent = 'Connecting to server...';
+      await this.net.connect(`${proto}://${location.host}`);
+      this.$('loading-fill').style.width = '60%';
+      text.textContent = 'Connected';
+    } catch (e) {
+      text.innerHTML = 'Could not connect to the game server.<br><button class="btn" style="margin-top:12px" onclick="location.reload()">Retry</button>';
+      return;
+    }
+    const qName = this.query.get('name');
+    const saved = localStorage.getItem('tanki.name');
+    if (qName) this.login(qName);
+    else if (saved && this.query.get('auto')) this.login(saved);
+    else { this.$('loading').classList.add('hidden'); this.showScreen('login'); }
+  }
+
+  login(name) {
+    localStorage.setItem('tanki.name', name);
+    this.$('loading-text').textContent = 'Loading profile...';
+    this.net.send({ t: C2S.HELLO, name });
+  }
+
+  bindNet() {
+    const n = this.net;
+    n.on('welcome', (m) => {
+      this.profile = m.profile;
+      this.dev = !!m.dev;
+      if (this.profile.settings && Object.keys(this.profile.settings).length && !localStorage.getItem('tanki.settings')) { this.settings = { ...this.settings, ...this.profile.settings }; this.applySettings(); }
+      this.$('loading-fill').style.width = '100%';
+      this.$('loading').classList.add('hidden');
+      this.showroom.build(this.equip());
+      this.showScreen('menu');
+      this.toast(`Welcome, ${this.profile.name}!`);
+    });
+    n.on('lobby', (m) => {
+      this.lobbyData = m;
+      this.online = m.online;
+      if (this.screen === 'lobby') this.screens.renderLobby();
+      if (this.query.get('auto') === 'battle' && !this.autoJoined && m.battles.length) {
+        this.autoJoined = true;
+        const want = this.query.get('battle');
+        const b = want ? m.battles.find((x) => x.map === want || x.mode === want || String(x.id) === want) || m.battles[0] : m.battles[0];
+        this.joinBattle(b.id, 0);
+      }
+    });
+    n.on('profile', (m) => {
+      this.profile = m.profile;
+      if (this.screen === 'menu') this.screens.renderMenu();
+      else if (this.screen === 'garage') this.garage.render();
+      else if (this.screen === 'lobby') this.screens.renderLobby();
+      if (this.showroom.built && !this.battle && this.screen !== 'garage') this.showroom.setTank(this.equip());
+    });
+    n.on('joined', (m) => this.startBattle(m));
+    n.on('left', () => { this.endBattle(); this.showScreen('lobby'); });
+    n.on('error', (m) => { this.toast(m.msg, 'error'); this.audio.play('error'); });
+    n.on('end', (m) => { if (this.battle) { this.screens.renderResults(m.results); this.audio.play('end'); this.input.releaseLock(); } });
+    n.on('restart', () => { this.screens.hideResults(); if (this.battle && !this.paused) this.hint('Click to take control'); });
+    n.on('garage_ok', (m) => { this.toast(m.msg, m.ok ? '' : 'error'); this.audio.play(m.ok ? 'buy' : 'error'); });
+    n.on('close', () => {
+      this.$('loading').classList.remove('hidden');
+      this.$('loading-text').innerHTML = 'Connection to the server was lost.<br><button class="btn" style="margin-top:12px" onclick="location.reload()">Reconnect</button>';
+      if (this.battle) this.endBattle();
+    });
+  }
+
+  showScreen(name, back) {
+    for (const id of SCREENS) this.$(id).classList.add('hidden');
+    this.screen = name;
+    if (!name) return;
+    const el = this.$(name === 'pause' ? 'overlay-pause' : 'screen-' + name);
+    if (name === 'login') this.screens.renderLogin();
+    else if (name === 'menu') { this.screens.renderMenu(); if (!this.battle && !this.showroom.built) this.showroom.build(this.equip()); }
+    else if (name === 'lobby') { this.screens.renderLobby(); this.net.send({ t: C2S.LOBBY }); }
+    else if (name === 'create') this.screens.renderCreate();
+    else if (name === 'garage') this.garage.open(!!this.battle);
+    else if (name === 'settings') this.screens.renderSettings(back || (this.battle ? 'pause' : 'menu'));
+    else if (name === 'pause') this.screens.renderPause();
+    if (el) el.classList.remove('hidden');
+    if (name !== 'pause' && name !== 'garage' && name !== 'settings') { this.input.enabled = false; }
+    if (this.battle && name === 'garage') {
+      // garage while in battle shows the showroom in place of the battle scene temporarily? No: keep the battle rendering, overlay panels.
+    }
+  }
+
+  hint(text) { if (this.battle) this.battle.hud.setHint(text); }
+
+  startBattle(msg) {
+    if (this.battle) this.battle.destroy();
+    this.showroom.built = false;
+    this.screens.hideResults();
+    this.paused = false;
+    this.showScreen(null);
+    this.battle = new BattleClient(this, msg);
+    this.battle.hud.setHint('Click the screen to take control');
+    this.canvas.focus();
+    this.audio.play('click');
+  }
+
+  endBattle() {
+    if (!this.battle) return;
+    this.battle.destroy();
+    this.battle = null;
+    this.paused = false;
+    this.screens.hideResults();
+    this.input.enabled = false;
+    this.showroom.build(this.equip());
+  }
+
+  openPause() {
+    if (!this.battle || this.paused) return;
+    this.paused = true;
+    this.battle.setPaused(true);
+    this.showScreen('pause');
+  }
+
+  closePause() {
+    if (!this.battle) return;
+    this.paused = false;
+    this.showScreen(null);
+    this.battle.setPaused(false);
+    this.hint('Click the screen to take control');
+  }
+
+  joinBattle(id, team) { this.net.send({ t: C2S.JOIN, id, team }); }
+  createBattle(opts) { this.net.send({ t: C2S.CREATE, opts }); }
+  leaveBattle() { this.net.send({ t: C2S.LEAVE }); this.endBattle(); this.showScreen('lobby'); }
+  garageOp(op, kind, id, n) { this.net.send({ t: C2S.GARAGE, op, kind, id, n }); }
+
+  setSettings(patch) {
+    Object.assign(this.settings, patch);
+    localStorage.setItem('tanki.settings', JSON.stringify(this.settings));
+    this.applySettings();
+    clearTimeout(this.settingsSendTimer);
+    this.settingsSendTimer = setTimeout(() => this.net.send({ t: C2S.SETTINGS, settings: this.settings }), 800);
+  }
+
+  applySettings() {
+    const s = this.settings;
+    this.view.setQuality({ scale: s.scale, shadows: s.shadows, bloom: s.bloom });
+    this.audio.setVolume({ master: s.volMaster, sfx: s.volSfx, ui: s.volUi, engine: s.volEngine });
+    if (this.battle) { this.battle.sky.setShadowQuality(s.shadows); this.battle.mouseAim = s.mouseAim; }
+    if (this.showroom && this.showroom.sky) this.showroom.sky.setShadowQuality(s.shadows);
+  }
+
+  toast(msg, cls = '') {
+    const el = document.createElement('div');
+    el.className = 'toast ' + cls;
+    el.textContent = msg;
+    this.$('toasts').appendChild(el);
+    setTimeout(() => { el.style.transition = 'opacity 0.4s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 3200);
+  }
+
+  quit() { if (window.tanki) window.tanki.quit(); }
+
+  loop() {
+    requestAnimationFrame(() => this.loop());
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - this.lastFrame) / 1000);
+    this.lastFrame = now;
+    try {
+      if (this.battle) this.battle.update(dt);
+      else if (this.showroom.built) this.showroom.update(dt);
+      this.view.render();
+    } catch (e) {
+      if (!this._loggedLoopError) { this._loggedLoopError = true; console.error('[tanki] frame error', e.stack || e); }
+    }
+  }
+}
+
+window.app = new App();
+window.app.start();

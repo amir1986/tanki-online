@@ -654,7 +654,7 @@ export class Room {
   handleInput(p, m) {
     const c = p.controls;
     c.f = clamp(+m.f || 0, -1, 1);
-    c.t = clamp(+m.t || 0, -1, 1);
+    c.t = clamp(+m.r || 0, -1, 1);
     c.tt = clamp(+m.tt || 0, -1, 1);
     c.fire = !!m.fire;
     c.yaw = typeof m.yaw === 'number' && isFinite(m.yaw) ? m.yaw : null;

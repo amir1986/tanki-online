@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Tanki Online</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect x=%274%27 y=%2712%27 width=%2724%27 height=%2712%27 rx=%273%27 fill=%27%237ed321%27/%3E%3Crect x=%2712%27 y=%276%27 width=%2710%27 height=%278%27 rx=%272%27 fill=%27%235ea81f%27/%3E%3Crect x=%2720%27 y=%278%27 width=%2710%27 height=%273%27 fill=%27%23333%27/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/client/css/style.css">
+  <script type="importmap">
+    { "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }
+  </script>
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <div id="ui">
+    <div id="loading" class="screen center">
+      <div class="loading-box">
+        <div class="logo">TANKI <span>ONLINE</span></div>
+        <div class="loading-bar"><div id="loading-fill"></div></div>
+        <div id="loading-text">Connecting...</div>
+      </div>
+    </div>
+    <div id="screen-login" class="screen center hidden"></div>
+    <div id="screen-menu" class="screen hidden"></div>
+    <div id="screen-lobby" class="screen hidden"></div>
+    <div id="screen-create" class="screen center hidden"></div>
+    <div id="screen-garage" class="screen hidden"></div>
+    <div id="screen-settings" class="screen center hidden"></div>
+    <div id="hud" class="hidden"></div>
+    <div id="overlay-pause" class="screen center hidden"></div>
+    <div id="overlay-results" class="screen center hidden"></div>
+    <div id="toasts"></div>
+  </div>
+  <script type="module" src="/client/js/main.mjs"></script>
+</body>
+</html>

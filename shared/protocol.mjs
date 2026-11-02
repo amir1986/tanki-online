@@ -6,7 +6,7 @@ export const C2S = {
   CREATE: 'create',      // { opts }
   JOIN: 'join',          // { id, team }
   LEAVE: 'leave',
-  INPUT: 'input',        // { f, t, tt, fire, yaw, seq }
+  INPUT: 'input',        // { f (throttle), r (turn), tt (turret turn), fire, yaw, seq }
   SUPPLY: 'supply',      // { id }
   CHAT: 'chat',          // { msg, team }
   GARAGE: 'garage',      // { op: 'buy'|'equip'|'upgrade'|'buySupply', kind, id, n }
