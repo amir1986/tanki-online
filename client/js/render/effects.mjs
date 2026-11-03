@@ -338,7 +338,7 @@ export class Effects {
     ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.strokeText(text, 64, 34);
     ctx.fillStyle = color; ctx.fillText(text, 64, 34);
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
     sp.scale.set(2.2 * size, 1.1 * size, 1);
     sp.position.set(pos[0] + rnd(-0.4, 0.4), pos[1] + 1.4, pos[2] + rnd(-0.4, 0.4));
     sp.renderOrder = 20;

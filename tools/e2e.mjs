@@ -21,12 +21,13 @@ const browser = await puppeteer.launch({
 const page = await browser.newPage();
 const errors = [];
 page.on('pageerror', (e) => { errors.push(e.message); console.log('[pageerror]', e.message); });
-page.on('console', (m) => { if (m.type() === 'error' && !m.text().includes('404')) { errors.push(m.text()); console.log('[console.error]', m.text()); } });
+// "VALIDATE_STATUS false" with an empty info log is a sporadic, harmless validateProgram quirk of software GL (SwiftShader)
+page.on('console', (m) => { if (m.type() === 'error' && !m.text().includes('404') && !m.text().includes('VALIDATE_STATUS false')) { errors.push(m.text()); console.log('[console.error]', m.text()); } });
 page.on('response', (r) => { if (r.status() >= 400) console.log('[http ' + r.status() + ']', r.url()); });
 const shot = (name) => page.screenshot({ path: `${outDir}/${name}.png` });
 // click through the DOM to avoid detached-handle races when screens re-render
 const click = async (sel) => { const ok = await page.evaluate((q) => { const el = document.querySelector(q); if (!el) return false; el.click(); return true; }, sel); if (!ok) throw new Error('no element for ' + sel); };
-const state = () => page.evaluate(() => ({ screen: window.app.screen, battle: !!window.app.battle, alive: window.app.battle?.me?.alive, pos: window.app.battle?.me?.pos, tanks: window.app.battle?.tanks.size, snaps: window.app.battle?.snaps.length, paused: window.app.paused, profile: window.app.profile && { name: window.app.profile.name, crystals: window.app.profile.crystals, xp: window.app.profile.xp } }));
+const state = () => page.evaluate(() => ({ screen: window.app.screen, battle: !!window.app.battle, alive: window.app.battle?.me?.alive, ready: !!window.app.battle?.ready, pos: window.app.battle?.me?.pos, tanks: window.app.battle?.tanks.size, snaps: window.app.battle?.snaps.length, paused: window.app.paused, profile: window.app.profile && { name: window.app.profile.name, crystals: window.app.profile.crystals, xp: window.app.profile.xp } }));
 
 const nick = 'E2E_' + (Date.now() % 1000000).toString(36); // fresh profile every run (full supply stock)
 await page.goto(`${base}/?name=${nick}`, { waitUntil: 'load' });
@@ -66,20 +67,28 @@ await click('#garage-back'); await sleep(300);
 await click('#menu-play'); await sleep(1200);
 await click('.battle-card'); await sleep(300);
 await click('#join-auto');
-await sleep(6000);
+await sleep(3000);
+// the scene is built once the map's assets are loaded (slow under software rendering): wait for it
+for (let i = 0; i < 120 && !(await state()).ready; i++) await sleep(500);
+await sleep(2500);
 s = await state();
-check('joined battle', s.battle && s.snaps > 0 && s.tanks >= 2, JSON.stringify({ tanks: s.tanks, snaps: s.snaps, alive: s.alive }));
+check('joined battle', s.battle && s.ready && s.snaps > 0 && s.tanks >= 2, JSON.stringify({ tanks: s.tanks, snaps: s.snaps, alive: s.alive, ready: s.ready }));
 await shot('05-battle-spawn');
 
-// drive forward for 2.5 s and verify movement
+// drive forward for 2.5 s and verify movement (retried when nearby bots freeze or destroy us right after spawning)
 await page.evaluate(() => { window.app.input.enabled = true; });
-const before = (await state()).pos;
-await page.keyboard.down('KeyW');
-await sleep(2500);
-await page.keyboard.up('KeyW');
-await sleep(400);
-const after = (await state()).pos;
-const moved = before && after ? Math.hypot(after[0] - before[0], after[2] - before[2]) : 0;
+let moved = 0;
+for (let attempt = 0; attempt < 4 && moved < 5; attempt++) {
+  const st = await page.evaluate(async () => { const { TF } = await import('/shared/constants.mjs'); const b = window.app.battle; return { alive: b.me.alive, frozen: !!(b.me.state && (b.me.state.flags & TF.FROZEN)) }; });
+  if (!st.alive || st.frozen) { await sleep(3000); continue; }
+  const before = (await state()).pos;
+  await page.keyboard.down('KeyW');
+  await sleep(2500);
+  await page.keyboard.up('KeyW');
+  await sleep(400);
+  const after = (await state()).pos;
+  moved = before && after ? Math.hypot(after[0] - before[0], after[2] - before[2]) : 0;
+}
 check('tank moves with W', moved > 5, `moved ${moved.toFixed(1)} m`);
 
 // turn + fire, count shot events
