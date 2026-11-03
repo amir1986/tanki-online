@@ -109,6 +109,24 @@ test('navigation grid: spawns and objectives are reachable', () => {
   }
 });
 
+test('daily missions are deterministic per player and day', async () => {
+  const { generateMissions, ensureMissions, addMissionProgress, dayKey } = await import('../shared/missions.mjs');
+  const a = generateMissions('Alice', '2026-11-03'), b = generateMissions('Alice', '2026-11-03'), c = generateMissions('Bob', '2026-11-03'), d = generateMissions('Alice', '2026-11-04');
+  assert.deepEqual(a, b);
+  assert.equal(a.length, 3);
+  assert.ok(JSON.stringify(a) !== JSON.stringify(c) || JSON.stringify(a) !== JSON.stringify(d));
+  for (const m of a) { assert.ok(m.target > 0 && m.reward >= 50 && !m.claimed && m.text.includes(String(m.target))); }
+  const profile = DEFAULT_PROFILE();
+  profile.name = 'Alice';
+  const block = ensureMissions(profile);
+  assert.equal(block.day, dayKey());
+  const mission = block.list[0];
+  const done = addMissionProgress(profile, mission.type, mission.target, mission.modes ? mission.modes[0] : 'DM');
+  assert.equal(done.length, 1);
+  assert.equal(profile.crystals, 2000 + mission.reward);
+  assert.deepEqual(addMissionProgress(profile, mission.type, 5, 'DM'), [], 'claimed missions do not progress again');
+});
+
 test('random spawn avoids occupied positions', () => {
   const map = finalizeMap(buildMap('sandbox'));
   const rng = mulberry32(3);

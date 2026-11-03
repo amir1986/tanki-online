@@ -14,7 +14,12 @@ export const MODES = {
   TDM: { id: 'TDM', name: 'Team Deathmatch', teams: true, desc: 'Two teams. Most kills wins.' },
   CTF: { id: 'CTF', name: 'Capture The Flag', teams: true, desc: 'Steal the enemy flag and bring it home.' },
   CP: { id: 'CP', name: 'Control Points', teams: true, desc: 'Hold the control points to earn points.' },
+  JGR: { id: 'JGR', name: 'Juggernaut', teams: false, desc: 'One tank is the Juggernaut with massive armour and firepower. Destroy it to take its place.' },
 };
+export const JUGGERNAUT_HP_MULT = 4;
+export const JUGGERNAUT_DAMAGE_MULT = 1.6;
+export const JUGGERNAUT_KILL_SCORE = 30;
+export const TUTORIAL_REWARD = 500;
 
 export const RESPAWN_DELAY = 3.0;        // seconds dead before respawn
 export const SPAWN_PROTECTION = 3.0;     // seconds of invulnerability after spawn
@@ -83,4 +88,5 @@ export const TF = {
   CHARGING: 1024,
   BOT: 2048,
   SNIPER: 4096,
+  JUGGER: 8192,
 };

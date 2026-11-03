@@ -261,6 +261,23 @@ label.check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 @keyframes fadein { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 @keyframes popfade { 0% { opacity: 0; transform: scale(0.7); } 10% { opacity: 1; transform: scale(1.05); } 20% { transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-10px); } }
 
+/* ---- menu extras: missions, training, leaderboard ---- */
+.menu-body { flex: 1; display: flex; align-items: center; justify-content: space-between; padding: 0 60px; gap: 40px; min-height: 0; }
+.menu-body .menu-main { margin: 0; }
+.missions-panel { width: 360px; display: flex; flex-direction: column; gap: 10px; }
+.mission { padding: 8px 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.04); display: flex; flex-direction: column; gap: 4px; }
+.mission.done { opacity: 0.6; }
+.mission .bar { height: 6px; background: #1b2531; border-radius: 3px; overflow: hidden; }
+.mission .bar > div { height: 100%; background: var(--accent); }
+.mission.done .bar > div { background: var(--gold); }
+.tutorial { position: absolute; left: 14px; top: 120px; width: 300px; background: rgba(0, 0, 0, 0.55); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; font-weight: 500; }
+.tutorial h3 { margin-bottom: 6px; }
+.tutorial .step { display: flex; align-items: center; gap: 8px; padding: 3px 0; color: #dfe6ee; }
+.tutorial .step.done { color: var(--accent); text-decoration: line-through; opacity: 0.8; }
+.tutorial .box { width: 16px; height: 16px; border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
+.tutorial .step.done .box { background: var(--accent2); border-color: var(--accent); color: #06100a; }
+#screen-leaderboard .lobby-body { padding: 16px 40px; }
+
 ::-webkit-scrollbar { width: 10px; }
 ::-webkit-scrollbar-thumb { background: #263645; border-radius: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }

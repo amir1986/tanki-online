@@ -282,6 +282,172 @@ defineMap({
   gold: [[0, 0], [40, 30], [-40, -30], [0, 40], [0, -40]],
 });
 
+// ---- RUINS ----------------------------------------------------------------
+defineMap({
+  id: 'ruins',
+  name: 'Ruins',
+  desc: 'A bombed-out city block. Broken buildings, rubble and narrow alleys.',
+  size: [140, 140],
+  cell: 2,
+  theme: {
+    ground: 'asphalt',
+    sky: { top: 0x3d4a5e, horizon: 0xc9c2b4, ground: 0x4a4540 },
+    fog: { color: 0xbdb6aa, near: 70, far: 240 }, fogDensity: 0.0038,
+    sun: [-60, 50, -80], sunColor: 0xffe2c0, sunIntensity: 2.4,
+    hemi: [0xb0b8c8, 0x403c38], hemiIntensity: 0.75,
+    turbidity: 9, rayleigh: 1.4, mie: 0.01, envIntensity: 0.5,
+  },
+  height: (x, z) => 0.2 * fbm(x / 9, z / 9, 61) + 0.08 * fbm(x / 2.5, z / 2.5, 62),
+  props: [
+    ...walls(140, 140, 'brick'),
+    // ruined buildings of mixed heights
+    ...[[-48, -48, 16, 12, 16, 0], [-48, -16, 14, 5, 18, 1], [-48, 18, 16, 15, 14, 2], [-46, 48, 14, 6, 14, 3],
+        [-16, -48, 18, 7, 14, 1], [18, -48, 14, 14, 16, 2], [48, -48, 16, 9, 14, 3],
+        [-16, 48, 16, 11, 14, 2], [16, 48, 18, 5, 14, 0], [48, 48, 14, 13, 16, 1],
+        [48, -16, 16, 6, 14, 0], [48, 18, 14, 10, 18, 3], [0, -20, 10, 4, 10, 1], [0, 20, 10, 4, 10, 2]]
+      .map(([x, z, w, h, l, t]) => building(x, z, w, h, l, 0, t)),
+    // rubble piles
+    ...[[-30, -30], [30, 30], [-30, 32], [32, -30], [-12, 0], [12, 0], [0, -36], [0, 36], [-52, -22], [52, 22]].map(([x, z], i) => rock(x, z, 1.6 + (i % 3) * 0.5, i * 0.7)),
+    ...[[-24, -8], [24, 8], [-36, 10], [36, -10], [-8, -58], [8, 58]].map(([x, z], i) => rock(x, z, 1.2, i)),
+    // plaza
+    platform(0, 0, 12, 1.0, 12, 'concrete'),
+    ramp(0, 10, 6, 8, 1.0, Math.PI), ramp(0, -10, 6, 8, 1.0, 0), ramp(10, 0, 6, 8, 1.0, -Math.PI / 2), ramp(-10, 0, 6, 8, 1.0, Math.PI / 2),
+    // cover
+    container(-28, 0, Math.PI / 2, 4), container(28, 0, Math.PI / 2, 1), container(0, -28, 0, 2), container(0, 28, 0, 3),
+    crate(-22, -22), crate(-20, -22), crate(-21, -22, 2, { dy: 2 }), crate(22, 22), crate(20, 22), crate(21, 22, 2, { dy: 2 }),
+    crate(-60, -24, 2.2), crate(60, 24, 2.2), crate(-24, 60, 2), crate(24, -60, 2),
+    barrier(-12, -30, Math.PI / 2), barrier(12, 30, Math.PI / 2), barrier(-30, 14, 0), barrier(30, -14, 0),
+    barrier(-62, 30, 0.3), barrier(62, -30, 0.3), barrier(-62, -32, -0.3), barrier(62, 32, -0.3),
+    bunker(-30, -58, 0), bunker(30, 58, 0),
+  ],
+  spawns: {
+    dm: [...ring(0, 0, 32, 8, true, 0.2), ...ring(0, 0, 60, 8, true, 0.4)],
+    red: [...line(64, -8, 64, 8, 4, -Math.PI / 2), ...line(58, -14, 58, 14, 3, -Math.PI / 2)],
+    blue: [...line(-64, -8, -64, 8, 4, Math.PI / 2), ...line(-58, -14, -58, 14, 3, Math.PI / 2)],
+  },
+  flags: { red: [62, 0], blue: [-62, 0] },
+  points: [{ id: 'A', x: 0, z: 0 }, { id: 'B', x: -32, z: 0 }, { id: 'C', x: 32, z: 0 }, { id: 'D', x: 0, z: -40 }, { id: 'E', x: 0, z: 40 }],
+  drops: [[-20, -36], [20, 36], [-36, 22], [36, -22], [0, -12], [0, 12], [-50, 0], [50, 0]],
+  gold: [[0, 0], [-32, 0], [32, 0], [0, 40], [0, -40]],
+});
+
+// ---- CANYON -----------------------------------------------------------------
+const canyonHeight = (x, z) => {
+  // valley along the x axis between two high plateaus
+  const wall = smoothstep(16, 30, Math.abs(z));
+  let h = wall * 9 + 1.6 * fbm(x / 16 + 3, z / 16 + 8, 71, 3) * (0.3 + wall);
+  // natural slopes at both ends so the plateaus are reachable
+  const endRamp = smoothstep(50, 68, Math.abs(x));
+  h = h * (1 - endRamp) + (wall * 2.5 + 0.5) * endRamp;
+  const fr = smoothstep(18, 8, Math.hypot(x - 62, z)), fb = smoothstep(18, 8, Math.hypot(x + 62, z));
+  h = h * (1 - fr) + 0.6 * fr;
+  h = h * (1 - fb) + 0.6 * fb;
+  return h;
+};
+defineMap({
+  id: 'canyon',
+  name: 'Canyon',
+  desc: 'A deep desert canyon with sniper plateaus on both rims and a long valley floor.',
+  size: [150, 150],
+  cell: 2,
+  theme: {
+    ground: 'sand',
+    sky: { top: 0x3b78c8, horizon: 0xf0dcc0, ground: 0xb08a60 },
+    fog: { color: 0xe8d8c0, near: 90, far: 300 }, fogDensity: 0.0024,
+    sun: [40, 60, -70], sunColor: 0xfff0d0, sunIntensity: 3.4,
+    hemi: [0xbfd4ff, 0x9a7a55], hemiIntensity: 0.9,
+    turbidity: 6, rayleigh: 1.6, mie: 0.007, envIntensity: 0.6,
+  },
+  height: canyonHeight,
+  props: [
+    ...walls(150, 150),
+    // cliff rocks along the rims
+    ...[-56, -42, -28, -14, 0, 14, 28, 42, 56].flatMap((x, i) => [rock(x, 22 + (i % 2) * 3, 3 + (i % 3), x * 0.1), rock(x + 7, -22 - (i % 2) * 3, 3 + ((i + 1) % 3), x * 0.13)]),
+    // plateau bunkers and cover
+    bunker(-20, 42, 0), bunker(20, -42, 0), bunker(30, 44, 0.3), bunker(-30, -44, 0.3),
+    container(0, 46, Math.PI / 2, 1), container(0, -46, Math.PI / 2, 2), crate(12, 50, 2), crate(-12, -50, 2),
+    barrier(-40, 38, 0.2), barrier(40, -38, 0.2),
+    // valley floor cover
+    container(-30, 4, 0.2, 3), container(30, -4, 0.2, 4), container(0, 8, Math.PI / 2, 1), container(0, -8, Math.PI / 2, 2),
+    crate(-14, -6), crate(-12, -6), crate(-13, -6, 2, { dy: 2 }), crate(14, 6), crate(12, 6), crate(13, 6, 2, { dy: 2 }),
+    crate(-44, -6, 1.8), crate(44, 6, 1.8), barrier(-22, 10, 1.2), barrier(22, -10, 1.2),
+    rock(-36, -10, 2, 0.5), rock(36, 10, 2, 0.9),
+    // bases
+    platform(62, 0, 16, 0.35, 14, 'metal'), platform(-62, 0, 16, 0.35, 14, 'metal'),
+    bunker(62, 12, Math.PI / 2), bunker(62, -12, Math.PI / 2), bunker(-62, 12, Math.PI / 2), bunker(-62, -12, Math.PI / 2),
+    ...[[-60, 60], [-40, 66], [40, -66], [60, -60], [66, 40], [-66, -40]].map(([x, z], i) => tree(x, z, 0.8 + (i % 2) * 0.3)),
+  ],
+  spawns: {
+    dm: [...ring(0, 0, 40, 6, true, 0.1).map((s) => ({ ...s, z: s.z * 0.3 })), ...line(-50, -8, 50, -8, 4, 0), ...line(-50, 8, 50, 8, 4, Math.PI)],
+    red: line(68, -10, 68, 10, 6, -Math.PI / 2),
+    blue: line(-68, -10, -68, 10, 6, Math.PI / 2),
+  },
+  flags: { red: [62, 0], blue: [-62, 0] },
+  points: [{ id: 'A', x: 0, z: 0 }, { id: 'B', x: -36, z: 0 }, { id: 'C', x: 36, z: 0 }, { id: 'D', x: 0, z: 40 }, { id: 'E', x: 0, z: -40 }],
+  drops: [[-20, 0], [20, 0], [-48, 4], [48, -4], [0, 14], [0, -14], [-10, 44], [10, -44]],
+  gold: [[0, 0], [-36, 0], [36, 0], [0, 40], [0, -40]],
+});
+
+// ---- FRONTIER ---------------------------------------------------------------
+const frontierHeight = (x, z) => {
+  let h = 4.5 * fbm(x / 38 + 20, z / 38 + 40, 81, 4) + 1.5 * fbm(x / 11, z / 11, 82, 3) - 2;
+  // two ridges across the map
+  h += 5 * gauss(z - 30, 9) * (0.7 + 0.3 * fbm(x / 20, 0, 83, 2));
+  h += 5 * gauss(z + 30, 9) * (0.7 + 0.3 * fbm(x / 20 + 5, 0, 84, 2));
+  // gaps through the ridges
+  h -= 5 * gauss(z - 30, 9) * (gauss(x - 30, 7) + gauss(x + 40, 7));
+  h -= 5 * gauss(z + 30, 9) * (gauss(x + 30, 7) + gauss(x - 40, 7));
+  const fr = smoothstep(22, 10, Math.hypot(x, z - 68)), fb = smoothstep(22, 10, Math.hypot(x, z + 68));
+  h = h * (1 - fr) + 0.8 * fr;
+  h = h * (1 - fb) + 0.8 * fb;
+  return h;
+};
+defineMap({
+  id: 'frontier',
+  name: 'Frontier',
+  desc: 'Two fortified ridges separate the bases. Break through the gaps or fight for the high ground.',
+  size: [160, 160],
+  cell: 2,
+  theme: {
+    ground: 'grass',
+    sky: { top: 0x2c66c0, horizon: 0xdbe6f2, ground: 0x6a8a52 },
+    fog: { color: 0xd6e2ee, near: 120, far: 380 }, fogDensity: 0.0022,
+    sun: [60, 65, 50], sunColor: 0xfff3dc, sunIntensity: 3.0,
+    hemi: [0xb6d4ff, 0x587a40], hemiIntensity: 0.85,
+    turbidity: 4.5, rayleigh: 2.0, mie: 0.004, envIntensity: 0.55,
+    roads: [{ a: [0, -74], b: [0, 74], w: 6 }],
+  },
+  height: frontierHeight,
+  props: [
+    ...walls(160, 160),
+    // ridge fortifications
+    bunker(-10, 30, 0), bunker(10, -30, 0), bunker(50, 30, 0.2), bunker(-50, -30, 0.2), bunker(-60, 30, 0), bunker(60, -30, 0),
+    barrier(0, 36, 0), barrier(0, -36, 0), barrier(-24, 34, 0.2), barrier(24, -34, 0.2),
+    container(20, 30, 0, 2), container(-20, -30, 0, 1),
+    // bases
+    platform(0, 68, 20, 0.35, 14, 'metal'), platform(0, -68, 20, 0.35, 14, 'metal'),
+    bunker(-14, 68, 0), bunker(14, 68, 0), bunker(-14, -68, 0), bunker(14, -68, 0),
+    container(24, 60, 0.5, 3), container(-24, -60, 0.5, 4),
+    // middle ground
+    crate(-6, 2), crate(-4, 2), crate(-5, 2, 2, { dy: 2 }), crate(6, -2), crate(4, -2), crate(5, -2, 2, { dy: 2 }),
+    rock(-30, 0, 2.4, 0.4), rock(30, 0, 2.4, 1.1), rock(-50, 10, 2, 0.2), rock(50, -10, 2, 0.7),
+    barrier(-16, 8, 1.2), barrier(16, -8, 1.2), container(-40, -8, 0.3, 2), container(40, 8, 0.3, 1),
+    // woods on the flanks
+    ...[-72, -62, -52, 52, 62, 72].flatMap((x) => [tree(x, 0, 1.1), tree(x + 4, 12, 0.9), tree(x - 3, -12, 1.0)]),
+    ...[-66, -56, 56, 66].flatMap((x) => [tree(x, 50, 1.0), tree(x, -50, 1.0), tree(x, 72, 0.9), tree(x, -72, 0.9)]),
+    rock(-70, 40, 2.5), rock(70, -40, 2.5), rock(66, 58, 2), rock(-66, -58, 2),
+  ],
+  spawns: {
+    dm: [...ring(0, 0, 50, 10, true, 0.2), ...ring(0, 0, 24, 6, true, 0.5)],
+    red: line(-16, 74, 16, 74, 6, Math.PI),
+    blue: line(-16, -74, 16, -74, 6, 0),
+  },
+  flags: { red: [0, 68], blue: [0, -68] },
+  points: [{ id: 'A', x: 0, z: 0 }, { id: 'B', x: 30, z: 30 }, { id: 'C', x: -30, z: -30 }, { id: 'D', x: -40, z: 30 }, { id: 'E', x: 40, z: -30 }],
+  drops: [[0, 20], [0, -20], [-30, 10], [30, -10], [-50, 50], [50, -50], [50, 50], [-50, -50], [0, 50], [0, -50]],
+  gold: [[0, 0], [30, 30], [-30, -30], [0, 50], [0, -50]],
+});
+
 // ---- builder --------------------------------------------------------------
 export const MAP_LIST = Object.values(MAPS).map((m) => ({ id: m.id, name: m.name, desc: m.desc, size: m.size, ground: m.theme.ground }));
 

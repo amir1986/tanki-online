@@ -15,6 +15,7 @@ export const C2S = {
   PROFILE: 'profile',
   SETTINGS: 'settings',  // { settings } persisted on profile
   PING: 'ping',          // { t }
+  LEADERBOARD: 'leaderboard',
 };
 
 // Server -> client message types
@@ -32,6 +33,7 @@ export const S2C = {
   ERROR: 'error',        // { msg }
   PONG: 'pong',          // { t, st }
   GARAGE_OK: 'garage_ok',
+  LEADERBOARD: 'leaderboard', // { top: [...] }
 };
 
 // Tank snapshot array layout

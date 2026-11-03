@@ -54,6 +54,11 @@ const DEFAULT_ROOMS = [
   { name: 'Polygon Free For All', map: 'polygon', mode: 'DM', bots: 9, timeLimit: 10, scoreLimit: 40 },
   { name: 'Kungur Warzone', map: 'kungur', mode: 'TDM', bots: 11, timeLimit: 15, scoreLimit: 50 },
   { name: 'Silence Control', map: 'silence', mode: 'CP', bots: 7, timeLimit: 12, scoreLimit: 25 },
+  { name: 'Sandbox Juggernaut', map: 'sandbox', mode: 'JGR', bots: 7, timeLimit: 10, scoreLimit: 40 },
+  { name: 'Ruins Flags', map: 'ruins', mode: 'CTF', bots: 9, timeLimit: 15, scoreLimit: 5 },
+  { name: 'Canyon Team Battle', map: 'canyon', mode: 'TDM', bots: 9, timeLimit: 12, scoreLimit: 40 },
+  { name: 'Frontier Control', map: 'frontier', mode: 'CP', bots: 9, timeLimit: 15, scoreLimit: 30 },
+  { name: 'Ruins Juggernaut', map: 'ruins', mode: 'JGR', bots: 9, timeLimit: 10, scoreLimit: 40 },
 ];
 
 export class GameServer {
@@ -106,6 +111,16 @@ export class GameServer {
       defaults: BATTLE_DEFAULTS,
       online: this.clients.size,
     };
+  }
+
+  leaderboard() {
+    const byName = new Map();
+    for (const p of this.profiles.list()) byName.set(p.name.toLowerCase(), p);
+    for (const [k, p] of this.profiles.cache) byName.set(k, { name: p.name, xp: p.xp, crystals: p.crystals, stats: p.stats });
+    return [...byName.values()]
+      .sort((a, b) => b.xp - a.xp)
+      .slice(0, 50)
+      .map((p) => ({ name: p.name, xp: p.xp, crystals: p.crystals, rank: rankForXp(p.xp).index, kills: p.stats?.kills || 0, battles: p.stats?.battles || 0, wins: p.stats?.wins || 0, flags: p.stats?.flags || 0, gold: p.stats?.gold || 0 }));
   }
 
   broadcastLobby() {
@@ -187,6 +202,9 @@ class Client {
       case C2S.LOBBY:
         this.send(s.lobby());
         break;
+      case C2S.LEADERBOARD:
+        this.send({ t: S2C.LEADERBOARD, top: s.leaderboard(), me: this.profile.name });
+        break;
       case C2S.PROFILE:
         this.sendProfile();
         break;
@@ -206,7 +224,9 @@ class Client {
           friendlyFire: !!o.friendlyFire,
           supplies: o.supplies !== false,
           drops: o.drops !== false,
+          training: !!o.training,
         };
+        if (opts.training) { opts.bots = Math.min(opts.bots || 3, 4); opts.timeLimit = 0; opts.scoreLimit = 0; opts.mode = 'DM'; }
         this.leaveRoom();
         const room = s.createRoom(opts, this.profile.name);
         this.joinRoom(room, +o.team || 0);

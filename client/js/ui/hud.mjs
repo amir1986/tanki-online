@@ -124,8 +124,15 @@ export class Hud {
     else el.innerHTML = leader ? `<span>${esc(leader.name)}</span><span class="muted small">${leader.kills} kills${limit ? ' / ' + limit : ''}</span>` : '';
   }
 
-  setObjectives(mode, flags, points, myTeam, roster) {
+  setObjectives(mode, flags, points, myTeam, roster, extra) {
     const el = this.$('hud-objectives');
+    if (mode === 'JGR') {
+      if (extra && extra.name) {
+        const frac = extra.maxHp ? Math.max(0, Math.min(1, extra.hp / extra.maxHp)) : 0;
+        el.innerHTML = `<div class="flag-status"><span style="color:var(--gold);font-weight:800">JUGGERNAUT</span><b>${esc(extra.name)}</b>${extra.me ? '<span class="muted">(you)</span>' : ''}<div class="hp-bar" style="width:140px;height:12px"><div style="width:${(frac * 100).toFixed(0)}%;background:linear-gradient(#ffd54f,#c69a12)"></div></div></div>`;
+      } else el.innerHTML = '<div class="flag-status"><span class="muted">Waiting for a Juggernaut...</span></div>';
+      return;
+    }
     if (mode === 'CTF' && flags) {
       const line = (color, f) => {
         const team = color === 'r' ? 1 : 2;

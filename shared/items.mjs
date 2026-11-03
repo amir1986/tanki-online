@@ -151,5 +151,7 @@ export const DEFAULT_PROFILE = () => ({
   supplies: { repair: 5, da: 3, dd: 3, nitro: 3, mine: 3 },
   stats: { kills: 0, deaths: 0, battles: 0, flags: 0, gold: 0, score: 0, wins: 0 },
   settings: {},
+  missions: null,
+  tutorialDone: false,
   created: Date.now(),
 });

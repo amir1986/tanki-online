@@ -69,6 +69,7 @@ function pickTarget(room, p) {
     const los = room.pw.hasLineOfSight(from, vadd(o.sim.pos, [0, 0.3, 0]));
     let s = 100 - d + (los ? 45 : 0);
     if (o.flag) s += 40;
+    if (o.jugger) s += 70;
     if (o.hp < o.maxHp * 0.3) s += 15;
     if (d < p.turret.range) s += 10;
     if (s > bestScore) { bestScore = s; best = o; }

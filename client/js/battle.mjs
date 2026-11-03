@@ -13,6 +13,7 @@ import { buildTank } from './render/tankmesh.mjs';
 import { Effects, TURRET_COLORS } from './render/effects.mjs';
 import { Textures } from './render/textures.mjs';
 import { Hud } from './ui/hud.mjs';
+import { Tutorial } from './ui/tutorial.mjs';
 
 const INTERP = 0.1;
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -21,14 +22,14 @@ const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), tmpQ = new THREE.
 const DROP_COLORS = { repair: 0xff4d4d, da: 0x4da6ff, dd: 0xffb84d, nitro: 0x7dff7d, gold: 0xffd54f };
 const DROP_NAMES = { repair: 'Repair kit', da: 'Double armor', dd: 'Double damage', nitro: 'Nitro', gold: 'Gold box' };
 
-function makeLabel(name, team, rank, hpFrac, isMe) {
+function makeLabel(name, team, rank, hpFrac, isMe, jugger = false) {
   const c = document.createElement('canvas'); c.width = 256; c.height = 72;
   const ctx = c.getContext('2d');
   ctx.font = 'bold 26px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-  const txt = (rank != null && RANKS[rank] ? RANKS[rank].name.split(' ')[0].slice(0, 10) + ' ' : '') + name;
+  const txt = (jugger ? '♛ ' : '') + (rank != null && RANKS[rank] ? RANKS[rank].name.split(' ')[0].slice(0, 10) + ' ' : '') + name;
   ctx.strokeText(txt, 128, 22);
-  ctx.fillStyle = isMe ? '#9cf046' : team === 1 ? '#ff6f60' : team === 2 ? '#64b5f6' : '#ffffff';
+  ctx.fillStyle = jugger ? '#ffd54f' : isMe ? '#9cf046' : team === 1 ? '#ff6f60' : team === 2 ? '#64b5f6' : '#ffffff';
   ctx.fillText(txt, 128, 22);
   ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(48, 46, 160, 12);
   ctx.fillStyle = hpFrac > 0.3 ? '#7ed321' : '#ff4d4d'; ctx.fillRect(50, 48, 156 * Math.max(0, Math.min(1, hpFrac)), 8);
@@ -147,6 +148,7 @@ export class BattleClient {
     act('zoomOut', () => this.cam.zoom(2));
     act('lockchange', (locked) => { if (!locked && !this.paused && this.running) this.hud.setHint('Click to resume control'); else this.hud.setHint(''); });
     this.audio.init();
+    this.tutorial = this.info.opts && this.info.opts.training ? new Tutorial(this) : null;
   }
 
   // ---- roster / tanks ---------------------------------------------------------------
@@ -306,7 +308,19 @@ export class BattleClient {
 
   onEvent(e) {
     const fx = this.effects, au = this.audio, hud = this.hud;
+    if (this.tutorial) this.tutorial.onEvent(e);
     switch (e.e) {
+      case 'mission': {
+        if (this.isMe(e.p)) { hud.notify(`Mission complete: ${e.text} (+${e.reward} crystals)`, 'gold'); au.play('rankup'); }
+        break;
+      }
+      case 'jugger': {
+        hud.notify(this.isMe(e.p) ? 'You are the Juggernaut!' : `${this.nameOf(e.p)} is the Juggernaut!`, 'gold');
+        au.play('countdown');
+        const t = this.tanks.get(e.p);
+        if (t) t.lastHp = -1;
+        break;
+      }
       case 'shot': {
         const t = this.tanks.get(e.p);
         if (t) t.mesh.kick();
@@ -499,20 +513,23 @@ export class BattleClient {
       const hpFrac = t.maxHp ? s.hp / t.maxHp : 1;
       if (Math.abs(hpFrac - t.lastHp) > 0.015) {
         t.lastHp = hpFrac;
-        t.label.material.map.image = makeLabel(t.name, t.team, t.rank, hpFrac, t.id === this.myId);
+        t.label.material.map.image = makeLabel(t.name, t.team, t.rank, hpFrac, t.id === this.myId, !!t.jugger);
         t.label.material.map.needsUpdate = true;
       }
       t.label.visible = t.id !== this.myId || !this.cam.sniper;
       // status visuals
-      const da = s.flags & TF.DA, prot = s.flags & TF.PROTECTED, dd = s.flags & TF.DD;
-      if (da || prot || dd) {
+      const da = s.flags & TF.DA, prot = s.flags & TF.PROTECTED, dd = s.flags & TF.DD, jug = s.flags & TF.JUGGER;
+      if (da || prot || dd || jug) {
         t.aura.visible = true;
         const pulse = 0.5 + 0.5 * Math.sin(this.now * (prot ? 14 : 4));
         if (prot) { t.aura.material.color.setHex(0xdfe9ff); t.aura.material.opacity = 0.02 + 0.05 * pulse; }
+        else if (jug) { t.aura.material.color.setHex(0xffc040); t.aura.material.opacity = 0.07 + 0.05 * pulse; }
         else if (da) { t.aura.material.color.setHex(0x4da6ff); t.aura.material.opacity = 0.05 + 0.04 * pulse; }
         else { t.aura.material.color.setHex(0xff8040); t.aura.material.opacity = 0.04 + 0.03 * pulse; }
         if (dd && da) t.aura.material.color.setHex(0xc080ff);
       } else t.aura.visible = false;
+      if (!!jug !== !!t.jugger) { t.jugger = !!jug; t.lastHp = -1; }
+      if (jug && Math.random() < dt * 20) this.effects.sparks.emit({ pos: [pos[0] + (Math.random() - 0.5) * 2.4, pos[1] + Math.random() * 1.2, pos[2] + (Math.random() - 0.5) * 2.4], vel: [0, 1.5, 0], color: 0xffc040, size: 0.3, life: 0.8 });
       if (s.flags & TF.BURNING) this.effects.burnEmit(pos, dt);
       if (s.flags & TF.FROZEN) this.effects.frostEmit(pos, dt);
       const back = [-Math.sin(t.yaw) * (t.tsize[2] / 2 + 0.3), 0, -Math.cos(t.yaw) * (t.tsize[2] / 2 + 0.3)];
@@ -623,7 +640,12 @@ export class BattleClient {
     let leader = null;
     if (!this.teams) for (const [id, sc] of this.scores) { if (!leader || sc.kills > leader.kills) leader = { name: this.nameOf(id), kills: sc.kills }; }
     this.hud.setScores(this.mode, this.teamScore, this.info.scoreLimit, leader);
-    this.hud.setObjectives(this.mode, b.fl, this.points, me.team, this.roster);
+    if (this.mode === 'JGR') {
+      const jr = [...this.roster.values()].find((r) => r.jugger);
+      const jt = jr ? this.tanks.get(jr.id) : null;
+      this.hud.setObjectives('JGR', null, null, me.team, this.roster, jr ? { name: jr.name, hp: jt && jt.state ? jt.state.hp : 0, maxHp: jr.maxHp, me: jr.id === this.myId } : null);
+    } else this.hud.setObjectives(this.mode, b.fl, this.points, me.team, this.roster);
+    if (this.tutorial) this.tutorial.update(dt);
     const status = [];
     if (f & TF.DA) status.push({ cls: 'da', text: 'Double armor' });
     if (f & TF.DD) status.push({ cls: 'dd', text: 'Double damage' });
@@ -642,6 +664,7 @@ export class BattleClient {
 
   destroy() {
     for (const u of this.unsubs) u();
+    if (this.tutorial) { this.tutorial.destroy(); this.tutorial = null; }
     this.stopLoops();
     this.audio.updateEngine(0.1, 0, false);
     this.input.enabled = false;

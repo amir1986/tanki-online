@@ -1,5 +1,6 @@
 // Garage transactions on a profile: buy / upgrade / equip / supplies.
 import { getHull, getTurret, getPaint, getSupply, upgradePrice, upgradeRank, rankForXp, MAX_MOD, HULLS, TURRETS, PAINTS } from '../shared/items.mjs';
+import { TUTORIAL_REWARD } from '../shared/constants.mjs';
 
 const KINDS = { hull: { get: getHull, key: 'hulls' }, turret: { get: getTurret, key: 'turrets' } };
 
@@ -67,6 +68,12 @@ export function garageOp(profile, op, kind, id, n = 1) {
       profile.crystals -= cost;
       profile.supplies[id] = (profile.supplies[id] | 0) + n;
       return { ok: true, msg: `${n} x ${s.name} purchased` };
+    }
+    case 'tutorialDone': {
+      if (profile.tutorialDone) return { ok: false, msg: 'Training reward already collected' };
+      profile.tutorialDone = true;
+      profile.crystals += TUTORIAL_REWARD;
+      return { ok: true, msg: `Training complete: +${TUTORIAL_REWARD} crystals` };
     }
     case 'unlockAll': {
       for (const h of HULLS) if (profile.hulls[h.id] == null) profile.hulls[h.id] = 3;

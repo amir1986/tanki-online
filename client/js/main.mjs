@@ -14,7 +14,7 @@ const DEFAULT_SETTINGS = {
   mouseAim: true, sensitivity: 1, invertY: false,
   volMaster: 0.8, volSfx: 1, volUi: 0.8, volEngine: 0.6,
 };
-const SCREENS = ['screen-login', 'screen-menu', 'screen-lobby', 'screen-create', 'screen-garage', 'screen-settings', 'overlay-pause'];
+const SCREENS = ['screen-login', 'screen-menu', 'screen-lobby', 'screen-create', 'screen-garage', 'screen-settings', 'screen-leaderboard', 'overlay-pause'];
 
 class App {
   constructor() {
@@ -116,6 +116,7 @@ class App {
     n.on('end', (m) => { if (this.battle) { this.screens.renderResults(m.results); this.audio.play('end'); this.input.releaseLock(); } });
     n.on('restart', () => { this.screens.hideResults(); if (this.battle && !this.paused) this.hint('Click to take control'); });
     n.on('garage_ok', (m) => { this.toast(m.msg, m.ok ? '' : 'error'); this.audio.play(m.ok ? 'buy' : 'error'); });
+    n.on('leaderboard', (m) => { this.leaderboard = m.top; if (this.screen === 'leaderboard') this.screens.renderLeaderboard(); });
     n.on('close', () => {
       this.$('loading').classList.remove('hidden');
       this.$('loading-text').innerHTML = 'Connection to the server was lost.<br><button class="btn" style="margin-top:12px" onclick="location.reload()">Reconnect</button>';
@@ -134,6 +135,7 @@ class App {
     else if (name === 'create') this.screens.renderCreate();
     else if (name === 'garage') this.garage.open(!!this.battle);
     else if (name === 'settings') this.screens.renderSettings(back || (this.battle ? 'pause' : 'menu'));
+    else if (name === 'leaderboard') { this.screens.renderLeaderboard(); this.net.send({ t: C2S.LEADERBOARD }); }
     else if (name === 'pause') this.screens.renderPause();
     if (el) el.classList.remove('hidden');
     if (name !== 'pause' && name !== 'garage' && name !== 'settings') { this.input.enabled = false; }
@@ -183,6 +185,19 @@ class App {
 
   joinBattle(id, team) { this.net.send({ t: C2S.JOIN, id, team }); }
   createBattle(opts) { this.net.send({ t: C2S.CREATE, opts }); }
+
+  /** Quick play: prefer running battles that already have players and free slots. */
+  quickPlay() {
+    const list = (this.lobbyData && this.lobbyData.battles) || [];
+    const open = list.filter((b) => b.state === 'running' && b.players < b.max && !b.training);
+    if (!open.length) { this.showScreen('lobby'); return; }
+    open.sort((a, b) => (b.humans - a.humans) || (Math.abs(a.players - 8) - Math.abs(b.players - 8)));
+    this.joinBattle(open[0].id, 0);
+  }
+
+  startTraining() {
+    this.createBattle({ name: `${this.profile.name}'s training`, map: 'sandbox', mode: 'DM', bots: 3, timeLimit: 0, scoreLimit: 0, maxPlayers: 4, training: true, supplies: true, drops: true });
+  }
   leaveBattle() { this.net.send({ t: C2S.LEAVE }); this.endBattle(); this.showScreen('lobby'); }
   garageOp(op, kind, id, n) { this.net.send({ t: C2S.GARAGE, op, kind, id, n }); }
 

@@ -31,6 +31,8 @@ export class ProfileStore {
     out.supplies = { ...d.supplies, ...(p.supplies || {}) };
     out.stats = { ...d.stats, ...(p.stats || {}) };
     out.settings = { ...(p.settings || {}) };
+    out.missions = p.missions && Array.isArray(p.missions.list) ? p.missions : null;
+    out.tutorialDone = !!p.tutorialDone;
     if (!out.hulls[out.equipped.hull] && out.hulls[out.equipped.hull] !== 0) out.equipped.hull = 'wasp';
     if (!out.turrets[out.equipped.turret] && out.turrets[out.equipped.turret] !== 0) out.equipped.turret = 'smoky';
     if (!out.paints.includes(out.equipped.paint)) out.equipped.paint = 'green';
@@ -82,7 +84,7 @@ export class ProfileStore {
   list() {
     try {
       return fs.readdirSync(this.dir).filter((f) => f.endsWith('.json')).map((f) => {
-        try { const p = JSON.parse(fs.readFileSync(path.join(this.dir, f), 'utf8')); return { name: p.name, xp: p.xp, crystals: p.crystals }; }
+        try { const p = JSON.parse(fs.readFileSync(path.join(this.dir, f), 'utf8')); return { name: p.name, xp: p.xp, crystals: p.crystals, stats: p.stats || {} }; }
         catch (e) { return null; }
       }).filter(Boolean);
     } catch (e) { return []; }

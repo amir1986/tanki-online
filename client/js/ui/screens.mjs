@@ -3,6 +3,7 @@ import { RANKS, rankProgress } from '/shared/items.mjs';
 import { MODES, BATTLE_DEFAULTS, GAME_VERSION, TEAM_NAMES } from '/shared/constants.mjs';
 import { buildMap, MAP_LIST } from '/shared/maps.mjs';
 import { KEY_LABELS, DEFAULT_BINDS } from '../input.mjs';
+import { missionSummary } from '/shared/missions.mjs';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmtTime = (s) => { if (s < 0) return '∞'; const m = Math.floor(s / 60), r = Math.floor(s % 60); return `${m}:${r.toString().padStart(2, '0')}`; };
@@ -83,18 +84,46 @@ export class Screens {
 
   renderMenu() {
     const app = this.app;
+    const missions = missionSummary(app.profile);
+    const missionRow = (m) => `<div class="mission ${m.claimed ? 'done' : ''}"><div class="row"><span class="grow">${esc(m.text)}</span><span class="crystals">${m.reward}</span></div><div class="bar"><div style="width:${Math.min(100, (m.progress / m.target) * 100).toFixed(0)}%"></div></div><div class="small muted">${m.claimed ? 'Completed' : `${m.progress} / ${m.target}`}${m.modes ? ` · ${m.modes.join('/')} battles` : ''}</div></div>`;
     this.$('screen-menu').innerHTML = `${this.topbar()}
-      <div class="menu-main">
-        <button class="btn big" id="menu-play">▶ Play</button>
-        <button class="btn secondary big" id="menu-garage">Garage</button>
-        <button class="btn secondary big" id="menu-settings">Settings</button>
-        ${app.isElectron ? '<button class="btn secondary big" id="menu-exit">Exit</button>' : ''}
+      <div class="menu-body">
+        <div class="menu-main">
+          <button class="btn big" id="menu-quick">▶ Play now</button>
+          <button class="btn secondary big" id="menu-play">Battle list</button>
+          <button class="btn secondary big" id="menu-garage">Garage</button>
+          <button class="btn secondary big" id="menu-training">Training${app.profile.tutorialDone ? '' : ' <span class="crystals small">+500</span>'}</button>
+          <button class="btn secondary big" id="menu-leaderboard">Leaderboard</button>
+          <button class="btn secondary big" id="menu-settings">Settings</button>
+          ${app.isElectron ? '<button class="btn secondary big" id="menu-exit">Exit</button>' : ''}
+        </div>
+        <div class="panel missions-panel">
+          <h3>Daily missions</h3>
+          ${missions.list.map(missionRow).join('')}
+          <div class="small muted" style="margin-top:6px">New missions every day (UTC). Completed so far: ${missions.completedTotal}</div>
+        </div>
       </div>
-      <div class="menu-footer"><span>v${GAME_VERSION}${app.dev ? ' · dev mode (type /help in battle chat)' : ''}</span><span>Battles: ${app.profile.stats.battles} · Kills: ${app.profile.stats.kills} · Flags: ${app.profile.stats.flags} · Gold boxes: ${app.profile.stats.gold}</span></div>`;
+      <div class="menu-footer"><span>v${GAME_VERSION}${app.dev ? ' · dev mode (type /help in battle chat)' : ''}</span><span>Battles: ${app.profile.stats.battles} · Wins: ${app.profile.stats.wins} · Kills: ${app.profile.stats.kills} · Flags: ${app.profile.stats.flags} · Gold boxes: ${app.profile.stats.gold}</span></div>`;
+    this.$('menu-quick').onclick = () => { app.audio.play('click'); app.quickPlay(); };
     this.$('menu-play').onclick = () => { app.audio.play('click'); app.showScreen('lobby'); };
     this.$('menu-garage').onclick = () => { app.audio.play('click'); app.showScreen('garage'); };
+    this.$('menu-training').onclick = () => { app.audio.play('click'); app.startTraining(); };
+    this.$('menu-leaderboard').onclick = () => { app.audio.play('click'); app.showScreen('leaderboard'); };
     this.$('menu-settings').onclick = () => { app.audio.play('click'); app.showScreen('settings'); };
     if (app.isElectron) this.$('menu-exit').onclick = () => app.quit();
+  }
+
+  renderLeaderboard() {
+    const app = this.app;
+    const top = app.leaderboard;
+    const rows = top ? top.map((p, i) => `<tr class="${p.name === app.profile.name ? 'me' : ''}"><td>${i + 1}</td><td><b>${esc(p.name)}</b></td><td class="muted small">${esc(RANKS[p.rank]?.name || '')}</td><td class="right">${p.xp}</td><td class="right">${p.kills}</td><td class="right">${p.battles}</td><td class="right">${p.wins}</td><td class="right">${p.flags}</td><td class="right">${p.gold}</td></tr>`).join('') : '<tr><td colspan="9" class="muted">Loading...</td></tr>';
+    this.$('screen-leaderboard').innerHTML = `${this.topbar()}
+      <div class="lobby-body"><div class="panel grow" style="overflow:auto">
+        <h2>Leaderboard</h2>
+        <div class="scoreboard" style="position:static;transform:none;width:auto"><table><tr><th>#</th><th>Player</th><th>Rank</th><th class="right">Experience</th><th class="right">Kills</th><th class="right">Battles</th><th class="right">Wins</th><th class="right">Flags</th><th class="right">Gold</th></tr>${rows}</table></div>
+        <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn secondary" id="lb-back">Back</button></div>
+      </div></div>`;
+    this.$('lb-back').onclick = () => { app.audio.play('click'); app.showScreen('menu'); };
   }
 
   renderLobby() {

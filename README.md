@@ -12,10 +12,12 @@ repository has no binary assets.
 - **Garage**: 7 hulls (Wasp, Hornet, Hunter, Viking, Dictator, Titan, Mammoth), 12 turrets (Smoky, Firebird, Twins, Isida,
   Railgun, Freeze, Thunder, Hammer, Ricochet, Striker, Vulcan, Shaft), 14 paints with turret resistances, M0–M3
   modifications, supplies shop, live 3D preview.
-- **Battle modes**: Deathmatch, Team Deathmatch, Capture the Flag, Control Points on 4 maps (Sandbox, Polygon, Silence,
-  Kungur). Create your own battle with custom time/score limits, bot count, friendly fire, supplies and drops.
+- **Battle modes**: Deathmatch, Team Deathmatch, Capture the Flag, Control Points and Juggernaut on 7 maps (Sandbox,
+  Polygon, Silence, Kungur, Ruins, Canyon, Frontier). Quick play, a battle list, or create your own battle with custom
+  time/score limits, bot count, friendly fire, supplies and drops.
 - **Progression**: 30 ranks from Recruit to Generalissimo, experience from kills, assists, flags and points, crystals from
-  the battle fund, gold boxes, rank-up bonuses. Profiles are saved per nickname.
+  the battle fund, gold boxes, rank-up bonuses, three daily missions with crystal rewards, a leaderboard and a guided
+  training battle with a one-time reward. Profiles are saved per nickname.
 - **Supplies and drops**: repair kit, double armor, double damage, nitro, mines, parachuted supply drops and the gold box.
 - **Bots**: A* navigation over a generated nav grid, objective play per mode, weapon-specific engagement ranges, supply use.
 - **Rendering**: physically based sky with image based lighting, three-layer terrain shading with normal maps, bevelled PBR

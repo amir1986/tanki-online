@@ -5,7 +5,9 @@ import {
   MINE_COOLDOWN, MINE_ARM_TIME, MINE_TRIGGER_RADIUS, MINE_DAMAGE, MINE_SPLASH, MAX_MINES_PER_PLAYER, REPAIR_SECONDS,
   DROP_INTERVAL, DROP_LIFETIME, GOLD_INTERVAL_MIN, GOLD_INTERVAL_MAX, GOLD_WARNING, GOLD_REWARD, DROP_FALL_SPEED,
   SCORE, FUND_PER_KILL, FUND_BASE, BATTLE_DEFAULTS, KILL_Y, TF,
+  JUGGERNAUT_HP_MULT, JUGGERNAUT_DAMAGE_MULT, JUGGERNAUT_KILL_SCORE,
 } from '../shared/constants.mjs';
+import { addMissionProgress } from '../shared/missions.mjs';
 import { hullStats, turretStats, getPaint, rankForXp, rankUpBonus } from '../shared/items.mjs';
 import { buildMap, randomSpawn } from '../shared/maps.mjs';
 import { PhysWorld } from '../shared/sim/world.mjs';
@@ -75,14 +77,35 @@ export class Room {
     this.dropTimer = 15;
     this.goldTimer = GOLD_INTERVAL_MIN + this.rng() * (GOLD_INTERVAL_MAX - GOLD_INTERVAL_MIN);
     this.goldWarned = false;
+    this.juggernaut = null;
     for (const p of this.players.values()) {
       if (p.sim) { p.sim.destroy(); p.sim = null; }
       p.alive = false;
       p.score = 0; p.kills = 0; p.deaths = 0; p.assists = 0; p.caps = 0; p.damageDealt = 0; p.flag = null;
+      p.jugger = false;
+      this.applyEquipStats(p);
       p.respawnAt = this.time + 0.5 + this.rng() * 1.5;
       p.supplyCd = {};
-      if (p.isBot) p.supplies = { ...BOT_SUPPLIES };
+      if (p.isBot) p.supplies = this.opts.training ? { repair: 0, da: 0, dd: 0, nitro: 0, mine: 0 } : { ...BOT_SUPPLIES };
     }
+    this.rosterDirty = true;
+  }
+
+  /** Daily mission progress for humans; completed missions are rewarded immediately. */
+  mission(p, type, amount) {
+    if (!p || !p.profile || amount <= 0) return;
+    const done = addMissionProgress(p.profile, type, amount, this.mode);
+    for (const m of done) this.events.push({ e: 'mission', p: p.id, text: m.text, reward: m.reward });
+    if (done.length) this.profileDirty(p);
+  }
+
+  makeJuggernaut(p) {
+    for (const o of this.players.values()) if (o.jugger) { o.jugger = false; this.applyEquipStats(o); if (o.alive) o.hp = Math.min(o.hp, o.maxHp); }
+    p.jugger = true;
+    this.juggernaut = p.id;
+    this.applyEquipStats(p);
+    if (p.alive) p.hp = p.maxHp;
+    this.events.push({ e: 'jugger', p: p.id });
     this.rosterDirty = true;
   }
 
@@ -103,7 +126,7 @@ export class Room {
       players: this.players.size, humans: this.humans().length, bots: this.bots().length, max: this.opts.maxPlayers,
       timeLeft: Math.round(this.timeLeft), state: this.state, teamScore: this.teamScore,
       timeLimit: this.opts.timeLimit, scoreLimit: this.opts.scoreLimit, friendlyFire: this.friendlyFire,
-      supplies: !!this.opts.supplies, drops: !!this.opts.drops,
+      supplies: !!this.opts.supplies, drops: !!this.opts.drops, training: !!this.opts.training,
       red: this.teamCount(1), blue: this.teamCount(2),
     };
   }
@@ -121,7 +144,7 @@ export class Room {
     return [...this.players.values()].map((p) => ({
       id: p.id, name: p.name, team: p.team, bot: p.isBot, rank: p.rank,
       hull: p.equip.hull, hullMod: p.equip.hullMod, turret: p.equip.turret, turretMod: p.equip.turretMod, paint: p.equip.paint,
-      maxHp: p.maxHp, score: p.score, kills: p.kills, deaths: p.deaths,
+      maxHp: p.maxHp, score: p.score, kills: p.kills, deaths: p.deaths, jugger: !!p.jugger,
     }));
   }
 
@@ -145,7 +168,7 @@ export class Room {
       lastInputAt: this.time, turretYaw: 0, w: null, fx: freshFx(),
       supplies: isBot ? { ...BOT_SUPPLIES } : { ...(profile?.supplies || {}) }, supplyCd: {},
       score: 0, kills: 0, deaths: 0, assists: 0, caps: 0, damageDealt: 0, damageLog: new Map(), dmgAcc: 0, dmgAccFrom: -1, dmgAccT: 0,
-      flag: null, selfDestructAt: null, bot: null, joinedAt: this.time, upsideDown: 0,
+      flag: null, selfDestructAt: null, bot: null, joinedAt: this.time, upsideDown: 0, jugger: false, dmgMission: 0,
     };
     this.applyEquipStats(p);
     this.players.set(id, p);
@@ -156,7 +179,7 @@ export class Room {
     p.hull = hullStats(p.equip.hull, p.equip.hullMod);
     p.turret = turretStats(p.equip.turret, p.equip.turretMod);
     p.paint = getPaint(p.equip.paint);
-    p.maxHp = p.hull.hp;
+    p.maxHp = p.jugger ? Math.round(p.hull.hp * JUGGERNAUT_HP_MULT) + 200 : p.hull.hp;
   }
 
   addHuman(client, profile, requestedTeam) {
@@ -185,6 +208,7 @@ export class Room {
     if (p.sim) { p.sim.destroy(); p.sim = null; }
     if (p.flag) this.dropFlag(p, p.lastPos || this.map.flags[p.flag]);
     for (let i = this.mines.length - 1; i >= 0; i--) if (this.mines[i].owner === pid) this.mines.splice(i, 1);
+    if (this.juggernaut === pid) this.juggernaut = null;
     this.players.delete(pid);
     if (!p.isBot) {
       this.events.push({ e: 'sys', m: `${p.name} left the battle` });
@@ -197,7 +221,8 @@ export class Room {
     const humanRank = Math.max(0, ...this.humans().map((h) => h.rank));
     const equip = botEquipment(this.rng, humanRank);
     const p = this.makePlayer({ name: botName(this.rng, [...this.players.values()].map((x) => x.name)), team, isBot: true, equip, rank: equip.rank });
-    p.bot = { goal: null, goalT: 0, stuckT: 0, reverseT: 0, aimErr: [0, 0], aimErrT: 0, target: null, retargetT: 0, role: this.rng() < 0.6 ? 'attack' : 'defend', skill: 0.5 + this.rng() * 0.5, lastPos: null, supplyT: 0, fireT: 0 };
+    p.bot = { goal: null, goalT: 0, stuckT: 0, reverseT: 0, aimErr: [0, 0], aimErrT: 0, target: null, retargetT: 0, role: this.rng() < 0.6 ? 'attack' : 'defend', skill: this.opts.training ? 0.12 : 0.5 + this.rng() * 0.5, lastPos: null, supplyT: 0, fireT: 0 };
+    if (this.opts.training) p.supplies = { repair: 0, da: 0, dd: 0, nitro: 0, mine: 0 };
     p.respawnAt = this.time + 0.5 + this.rng() * 2;
     this.rosterDirty = true;
     return p;
@@ -289,8 +314,19 @@ export class Room {
       this.totalKills++;
       this.fund += FUND_PER_KILL;
       this.addScore(killer, SCORE.KILL, 'kill');
+      this.mission(killer, 'kills', 1);
       if (killer.profile) { killer.profile.stats.kills++; }
       if (this.mode === 'TDM' && killer.team) this.teamScore[killer.team]++;
+    }
+    if (this.mode === 'JGR' && victim.jugger) {
+      victim.jugger = false;
+      this.juggernaut = null;
+      this.applyEquipStats(victim);
+      if (killer && killer !== victim) {
+        this.addScore(killer, JUGGERNAUT_KILL_SCORE - SCORE.KILL, 'juggernaut');
+        this.mission(killer, 'juggernaut', 1);
+        this.makeJuggernaut(killer);
+      }
     }
     for (const [aid, log] of victim.damageLog) {
       if (killer && aid === killer.id) continue;
@@ -298,6 +334,7 @@ export class Room {
       if (!a || this.time - log.t > 8 || log.dmg < victim.maxHp * 0.2) continue;
       a.assists++;
       this.addScore(a, SCORE.ASSIST, 'assist');
+      this.mission(a, 'assists', 1);
     }
     victim.damageLog.clear();
     victim.fx = freshFx();
@@ -307,6 +344,7 @@ export class Room {
 
   addScore(p, n, why) {
     p.score += n;
+    if (n > 0) this.mission(p, 'score', n);
     if (p.profile) {
       const before = rankForXp(p.profile.xp).index;
       p.profile.xp = Math.max(0, p.profile.xp + n);
@@ -334,6 +372,7 @@ export class Room {
     if (target.protectedUntil > this.time) return 0;
     let dmg = amount;
     if (attacker && attacker.fx.dd > this.time) dmg *= 2;
+    if (attacker && attacker.jugger) dmg *= JUGGERNAUT_DAMAGE_MULT;
     if (target.fx.da > this.time) dmg *= 0.5;
     const res = (target.paint.resist && target.paint.resist[turretId]) || 0;
     dmg *= 1 - res;
@@ -343,6 +382,10 @@ export class Room {
       const prev = target.damageLog.get(attacker.id);
       target.damageLog.set(attacker.id, { t: this.time, dmg: (prev && this.time - prev.t < 8 ? prev.dmg : 0) + dmg });
       attacker.damageDealt += dmg;
+      if (attacker.profile) {
+        attacker.dmgMission = (attacker.dmgMission || 0) + dmg;
+        if (attacker.dmgMission >= 10) { const whole = Math.floor(attacker.dmgMission); attacker.dmgMission -= whole; this.mission(attacker, 'damage', whole); }
+      }
     }
     if (!silent) {
       this.events.push({ e: 'hit', p: (pos || target.sim.pos).map((v) => +v.toFixed(2)), d: Math.round(dmg), v: target.id, a: attacker ? attacker.id : -1, c: crit ? 1 : 0, k: turretId });
@@ -492,6 +535,7 @@ export class Room {
     else if (d.type === 'nitro') p.fx.nitro = Math.max(p.fx.nitro, t) + SUPPLY_DURATION;
     else if (d.type === 'gold') {
       this.addScore(p, SCORE.GOLD, 'gold');
+      this.mission(p, 'gold', 1);
       if (p.profile) { p.profile.crystals += GOLD_REWARD; p.profile.stats.gold++; this.profileDirty(p); }
       this.events.push({ e: 'gold', ph: 'taken', p: p.id, n: p.name });
     }
@@ -548,6 +592,7 @@ export class Room {
         fe.state = 0; fe.carrier = null; fe.pos = [...this.map.flags[enemy]];
         this.teamScore[p.team]++;
         this.addScore(p, SCORE.FLAG_CAPTURE, 'capture');
+        this.mission(p, 'flags', 1);
         if (p.profile) { p.profile.stats.flags++; }
         this.events.push({ e: 'flag', c: enemy, a: 'captured', p: p.id });
         this.rosterDirty = true;
@@ -598,7 +643,7 @@ export class Room {
         this.events.push({ e: 'cp', id: pt.id, o: 0, by: team });
       } else {
         pt.owner = team;
-        for (const p of present) if (p.team === team) this.addScore(p, SCORE.CP_CAPTURE, 'cp');
+        for (const p of present) if (p.team === team) { this.addScore(p, SCORE.CP_CAPTURE, 'cp'); this.mission(p, 'points', 1); }
         this.events.push({ e: 'cp', id: pt.id, o: team, by: team });
       }
     }
@@ -635,6 +680,8 @@ export class Room {
         p.profile.crystals += crystals;
         p.profile.stats.battles++;
         if (won) p.profile.stats.wins++;
+        this.mission(p, 'battles', 1);
+        if (won) this.mission(p, 'wins', 1);
         this.profileDirty(p);
       }
       return { id: p.id, name: p.name, team: p.team, bot: p.isBot, score: p.score, kills: p.kills, deaths: p.deaths, assists: p.assists, caps: p.caps, crystals, xp: p.score, won };
@@ -707,6 +754,11 @@ export class Room {
       }
       if (!p.isBot && t - p.lastInputAt > 4) { p.controls.f = 0; p.controls.t = 0; p.controls.tt = 0; p.controls.fire = false; }
       if (p.selfDestructAt != null && t >= p.selfDestructAt) { this.kill(p, null, 'self'); continue; }
+    }
+    // juggernaut assignment
+    if (this.mode === 'JGR' && this.state === 'running' && (this.juggernaut == null || !this.players.has(this.juggernaut))) {
+      const alive = this.alivePlayers();
+      if (alive.length >= 2 || (alive.length === 1 && this.players.size === 1)) this.makeJuggernaut(alive[Math.floor(this.rng() * alive.length)]);
     }
     // bots
     this.botThinkTimer += dt;
@@ -808,6 +860,7 @@ export class Room {
     if (p.w && p.w.charging) f |= TF.CHARGING;
     if (p.isBot) f |= TF.BOT;
     if (p.w && p.w.sniper) f |= TF.SNIPER;
+    if (p.jugger) f |= TF.JUGGER;
     return f;
   }
 

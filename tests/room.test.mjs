@@ -5,6 +5,7 @@ import { Room } from '../server/room.mjs';
 import { garageOp } from '../server/garage.mjs';
 import { botEquipment, botName } from '../server/bots.mjs';
 import { DEFAULT_PROFILE, getHull, getTurret, RANKS } from '../shared/items.mjs';
+import { addMissionProgress } from '../shared/missions.mjs';
 import { RESPAWN_DELAY, SPAWN_PROTECTION, CP_CAPTURE_SECONDS, TEAM } from '../shared/constants.mjs';
 
 const DT = 1 / 60;
@@ -183,6 +184,51 @@ test('bot equipment respects rank and names are unique', () => {
   assert.ok(getHull(e.hull).rank <= 4 && getTurret(e.turret).rank <= 4);
   const taken = [];
   for (let i = 0; i < 20; i++) { const n = botName(() => i / 20, taken); assert.ok(!taken.includes(n)); taken.push(n); }
+});
+
+test('juggernaut mode: assignment, bonus armour, transfer on kill', () => {
+  const room = makeRoom({ map: 'sandbox', mode: 'JGR', bots: 0, timeLimit: 0, scoreLimit: 40 });
+  const a = human(room, 'A').p, b = human(room, 'B').p;
+  forceSpawn(room, a); forceSpawn(room, b);
+  steps(room, 0.2);
+  const jug = [a, b].find((p) => p.jugger);
+  assert.ok(jug, 'a juggernaut was assigned');
+  assert.ok(jug.maxHp > jug.hull.hp * 3, `juggernaut armour ${jug.maxHp}`);
+  const other = jug === a ? b : a;
+  // juggernaut hits harder
+  const hp0 = other.hp;
+  room.damage(other, 10, jug, 'smoky');
+  assert.ok(hp0 - other.hp > 10, 'juggernaut damage multiplier');
+  // killing the juggernaut transfers the role and awards bonus score
+  const score0 = other.score;
+  room.damage(jug, 1e6, other, 'railgun');
+  assert.ok(!jug.alive && !jug.jugger);
+  assert.ok(other.jugger, 'killer became the juggernaut');
+  assert.equal(room.juggernaut, other.id);
+  assert.ok(other.score - score0 >= 30, 'juggernaut kill score');
+  assert.equal(other.hp, other.maxHp, 'new juggernaut healed to full');
+});
+
+test('daily missions progress and reward through battle events', () => {
+  const room = makeRoom({ map: 'sandbox', mode: 'DM', bots: 0, timeLimit: 0, scoreLimit: 100 });
+  const { p: a, profile } = human(room, 'MissionTester'), b = human(room, 'B').p;
+  forceSpawn(room, a); forceSpawn(room, b);
+  const before = JSON.parse(JSON.stringify(profile.missions || null));
+  room.kill(b, a, 'smoky');
+  assert.ok(profile.missions && profile.missions.list.length === 3, 'missions generated');
+  const kills = profile.missions.list.find((m) => m.type === 'kills');
+  const score = profile.missions.list.find((m) => m.type === 'score');
+  if (kills) assert.equal(kills.progress, 1);
+  if (score) assert.ok(score.progress >= 10);
+  // force-complete a mission and check the reward lands
+  const m = profile.missions.list.find((x) => !x.claimed);
+  const crystals = profile.crystals;
+  m.progress = m.target - 1;
+  const done = addMissionProgress(profile, m.type, 1, m.modes ? m.modes[0] : room.mode);
+  assert.equal(done.length, 1);
+  assert.ok(m.claimed);
+  assert.equal(profile.crystals, crystals + m.reward);
+  void before;
 });
 
 test('garage transactions', () => {
