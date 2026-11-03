@@ -185,6 +185,7 @@ export class Screens {
         <label class="field">Resolution scale: <span id="st-scale-v">${s.scale}</span><input type="range" id="st-scale" min="0.5" max="1" step="0.05" value="${s.scale}"></label>
         <label class="field">Shadows<select id="st-shadows"><option value="0">Off</option><option value="1">Low</option><option value="2">High</option><option value="3">Ultra</option></select></label>
         <label class="check" style="align-self:end"><input type="checkbox" id="st-bloom" ${s.bloom ? 'checked' : ''}> Bloom glow</label>
+        <label class="check" style="align-self:end"><input type="checkbox" id="st-ao" ${s.ao ? 'checked' : ''}> Ambient occlusion</label>
         <label class="check" style="align-self:end"><input type="checkbox" id="st-fps" ${s.showFps ? 'checked' : ''}> Show FPS</label>
       </div>
       <h3>Controls</h3>
@@ -207,7 +208,7 @@ export class Screens {
     this.$('st-shadows').value = String(s.shadows);
     const apply = () => {
       app.setSettings({
-        quality: this.$('st-quality').value, scale: +this.$('st-scale').value, shadows: +this.$('st-shadows').value, bloom: this.$('st-bloom').checked, showFps: this.$('st-fps').checked,
+        quality: this.$('st-quality').value, scale: +this.$('st-scale').value, shadows: +this.$('st-shadows').value, bloom: this.$('st-bloom').checked, ao: this.$('st-ao').checked, showFps: this.$('st-fps').checked,
         mouseAim: this.$('st-mouse').checked, invertY: this.$('st-invert').checked, sensitivity: +this.$('st-sens').value,
         volMaster: +this.$('st-vm').value, volSfx: +this.$('st-vs').value, volEngine: +this.$('st-ve').value, volUi: +this.$('st-vu').value,
       });
@@ -217,11 +218,11 @@ export class Screens {
     };
     this.$('st-quality').onchange = () => {
       const q = this.$('st-quality').value;
-      const preset = { low: [0.6, 0, false], medium: [0.85, 1, false], high: [1, 2, true], ultra: [1, 3, true] }[q];
-      this.$('st-scale').value = preset[0]; this.$('st-shadows').value = String(preset[1]); this.$('st-bloom').checked = preset[2];
+      const preset = { low: [0.6, 0, false, false], medium: [0.85, 1, true, false], high: [1, 2, true, true], ultra: [1, 3, true, true] }[q];
+      this.$('st-scale').value = preset[0]; this.$('st-shadows').value = String(preset[1]); this.$('st-bloom').checked = preset[2]; this.$('st-ao').checked = preset[3];
       apply();
     };
-    for (const id of ['st-scale', 'st-shadows', 'st-bloom', 'st-fps', 'st-mouse', 'st-invert', 'st-sens', 'st-vm', 'st-vs', 'st-ve', 'st-vu']) this.$(id).oninput = () => { if (id !== 'st-quality') { apply(); } };
+    for (const id of ['st-scale', 'st-shadows', 'st-bloom', 'st-ao', 'st-fps', 'st-mouse', 'st-invert', 'st-sens', 'st-vm', 'st-vs', 'st-ve', 'st-vu']) this.$(id).oninput = () => { if (id !== 'st-quality') { apply(); } };
     this.$('st-back').onclick = () => { app.audio.play('click'); app.showScreen(backTo); };
   }
 

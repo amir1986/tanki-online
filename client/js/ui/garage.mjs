@@ -11,9 +11,10 @@ const hex = (c) => '#' + c.toString(16).padStart(6, '0');
 const SHOWROOM_THEME = {
   ground: 'sand',
   sky: { top: 0x1d2d4a, horizon: 0xf2b677, ground: 0x4a3a30 },
-  fog: { color: 0xd9a070, near: 60, far: 220 },
-  sun: [-60, 35, 80], sunColor: 0xffd9a8, sunIntensity: 2.2,
+  fog: { color: 0xd9a070, near: 60, far: 220 }, fogDensity: 0.0015,
+  sun: [-60, 22, 80], sunColor: 0xffd2a0, sunIntensity: 2.6,
   hemi: [0x9fb8e8, 0x6a5040], hemiIntensity: 0.8,
+  turbidity: 8, rayleigh: 2.5, mie: 0.012, envIntensity: 0.7,
 };
 
 export class Showroom {
@@ -28,13 +29,16 @@ export class Showroom {
 
   build(equip) {
     this.view.clearScene();
-    this.sky = buildSky(SHOWROOM_THEME, this.scene);
-    const tex = Textures.get('sand').clone(); tex.repeat.set(24, 24); tex.needsUpdate = true;
-    const ground = new THREE.Mesh(new THREE.CircleGeometry(90, 48), new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
+    this.sky = buildSky(SHOWROOM_THEME, this.scene, this.view.renderer);
+    const sand = Textures.ground('sand');
+    const tex = sand.map.clone(); tex.repeat.set(30, 30); tex.needsUpdate = true;
+    const ntex = sand.normal.clone(); ntex.repeat.set(30, 30); ntex.needsUpdate = true;
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(90, 48), new THREE.MeshStandardMaterial({ map: tex, normalMap: ntex, roughness: 1 }));
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
     this.scene.add(ground);
-    const pad = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.6, 0.3, 40), new THREE.MeshStandardMaterial({ map: Textures.get('metal'), roughness: 0.5, metalness: 0.5 }));
+    const metal = Textures.prop('metal');
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.6, 0.3, 40), new THREE.MeshStandardMaterial({ map: metal.map, normalMap: metal.normal, roughness: 0.5, metalness: 0.6 }));
     pad.position.y = 0.15;
     pad.receiveShadow = true; pad.castShadow = true;
     this.scene.add(pad);
@@ -42,13 +46,15 @@ export class Showroom {
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02;
     this.scene.add(ring);
     // a few props for scenery
-    const crateMat = new THREE.MeshStandardMaterial({ map: Textures.get('crate'), roughness: 0.85 });
+    const crateTex = Textures.prop('crate');
+    const crateMat = new THREE.MeshStandardMaterial({ map: crateTex.map, normalMap: crateTex.normal, roughness: 0.85 });
     for (const [x, z, s] of [[9, -6, 2], [11, -4, 2], [10, -5, 2], [-10, 5, 1.6], [-12, 8, 2.2]]) {
       const c = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), crateMat);
       c.position.set(x, s / 2, z); c.castShadow = true; c.receiveShadow = true; c.rotation.y = x * 0.3;
       this.scene.add(c);
     }
-    const contMat = new THREE.MeshStandardMaterial({ map: Textures.get('container'), color: 0x2f6fb0, roughness: 0.6, metalness: 0.4 });
+    const contTex = Textures.prop('container');
+    const contMat = new THREE.MeshStandardMaterial({ map: contTex.map, normalMap: contTex.normal, color: 0x2f5f94, roughness: 0.55, metalness: 0.55 });
     const cont = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.7, 6.2), contMat);
     cont.position.set(-9, 1.35, -9); cont.rotation.y = 0.6; cont.castShadow = true; cont.receiveShadow = true;
     this.scene.add(cont);

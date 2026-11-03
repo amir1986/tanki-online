@@ -8,7 +8,7 @@ import { getTurret, getHull, getSupply, RANKS, hullStats } from '/shared/items.m
 import { qToYaw, angleDiff } from '/shared/sim/math.mjs';
 import { buildTerrain } from './render/terrain.mjs';
 import { buildSky } from './render/sky.mjs';
-import { buildProps, buildFlagBase, buildFlag, animateFlag, buildControlPoint, setControlPointState } from './render/props.mjs';
+import { buildProps, buildClutter, buildFlagBase, buildFlag, animateFlag, buildControlPoint, setControlPointState } from './render/props.mjs';
 import { buildTank } from './render/tankmesh.mjs';
 import { Effects, TURRET_COLORS } from './render/effects.mjs';
 import { Textures } from './render/textures.mjs';
@@ -76,12 +76,18 @@ export class BattleClient {
 
     // scene
     this.view.clearScene();
-    this.sky = buildSky(this.map.theme, this.scene);
+    this.sky = buildSky(this.map.theme, this.scene, this.view.renderer);
     this.sky.setShadowQuality(app.settings.shadows);
     this.terrain = buildTerrain(this.map);
     this.scene.add(this.terrain);
     this.props = buildProps(this.map);
     this.scene.add(this.props);
+    this.clutter = buildClutter(this.map);
+    this.scene.add(this.clutter);
+    this.cam.setOccluders([
+      ...this.props.children.filter((m) => m.isMesh && m.userData.prop && m.userData.prop.kind !== 'ramp'),
+      ...this.terrain.children.filter((m) => m.name === 'terrain'),
+    ]);
     this.effects = new Effects(this.scene);
     this.objective = new THREE.Group();
     this.scene.add(this.objective);
@@ -502,9 +508,9 @@ export class BattleClient {
       if (da || prot || dd) {
         t.aura.visible = true;
         const pulse = 0.5 + 0.5 * Math.sin(this.now * (prot ? 14 : 4));
-        if (prot) { t.aura.material.color.setHex(0xffffff); t.aura.material.opacity = 0.05 + 0.12 * pulse; }
-        else if (da) { t.aura.material.color.setHex(0x4da6ff); t.aura.material.opacity = 0.12 + 0.06 * pulse; }
-        else { t.aura.material.color.setHex(0xff8040); t.aura.material.opacity = 0.08 + 0.05 * pulse; }
+        if (prot) { t.aura.material.color.setHex(0xdfe9ff); t.aura.material.opacity = 0.02 + 0.05 * pulse; }
+        else if (da) { t.aura.material.color.setHex(0x4da6ff); t.aura.material.opacity = 0.05 + 0.04 * pulse; }
+        else { t.aura.material.color.setHex(0xff8040); t.aura.material.opacity = 0.04 + 0.03 * pulse; }
         if (dd && da) t.aura.material.color.setHex(0xc080ff);
       } else t.aura.visible = false;
       if (s.flags & TF.BURNING) this.effects.burnEmit(pos, dt);
@@ -646,6 +652,8 @@ export class BattleClient {
     this.effects.clear();
     for (const t of this.tanks.values()) { t.mesh.dispose(); }
     this.tanks.clear();
+    this.cam.setOccluders([]);
+    if (this.sky && this.sky.dispose) this.sky.dispose();
     this.view.clearScene();
   }
 }

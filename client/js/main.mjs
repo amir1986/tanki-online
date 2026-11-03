@@ -10,7 +10,7 @@ import { BattleClient } from './battle.mjs';
 import { C2S } from '/shared/protocol.mjs';
 
 const DEFAULT_SETTINGS = {
-  quality: 'high', scale: 1, shadows: 2, bloom: true, showFps: false,
+  quality: 'high', scale: 1, shadows: 2, bloom: true, ao: true, showFps: false,
   mouseAim: true, sensitivity: 1, invertY: false,
   volMaster: 0.8, volSfx: 1, volUi: 0.8, volEngine: 0.6,
 };
@@ -196,7 +196,7 @@ class App {
 
   applySettings() {
     const s = this.settings;
-    this.view.setQuality({ scale: s.scale, shadows: s.shadows, bloom: s.bloom });
+    this.view.setQuality({ scale: s.scale, shadows: s.shadows, bloom: s.bloom, ao: s.ao });
     this.audio.setVolume({ master: s.volMaster, sfx: s.volSfx, ui: s.volUi, engine: s.volEngine });
     if (this.battle) { this.battle.sky.setShadowQuality(s.shadows); this.battle.mouseAim = s.mouseAim; }
     if (this.showroom && this.showroom.sky) this.showroom.sky.setShadowQuality(s.shadows);

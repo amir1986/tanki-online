@@ -34,20 +34,20 @@ export const TURRETS = [
 
 // resist: fraction of damage removed from that turret
 export const PAINTS = [
-  { id: 'green',      name: 'Green',      price: 0,     rank: 0,  color: 0x6b8e3a, pattern: 'solid',   resist: {} },
-  { id: 'holiday',    name: 'Holiday',    price: 300,   rank: 1,  color: 0xd94c4c, pattern: 'stripes', color2: 0xf2f2f2, resist: {} },
-  { id: 'sandstone',  name: 'Sandstone',  price: 600,   rank: 2,  color: 0xc9b37e, pattern: 'camo',    color2: 0x8f7a4c, resist: { firebird: 0.15 } },
-  { id: 'forest',     name: 'Forest',     price: 900,   rank: 3,  color: 0x3f6b35, pattern: 'camo',    color2: 0x24401f, resist: { smoky: 0.15, twins: 0.1 } },
-  { id: 'arctic',     name: 'Arctic',     price: 1200,  rank: 3,  color: 0xe8f0f5, pattern: 'camo',    color2: 0x9fb4c4, resist: { freeze: 0.3 } },
-  { id: 'flame',      name: 'Flame',      price: 1800,  rank: 4,  color: 0xff6a00, pattern: 'flames',  color2: 0x3a1d00, resist: { firebird: 0.35 } },
-  { id: 'storm',      name: 'Storm',      price: 2500,  rank: 5,  color: 0x4a5a73, pattern: 'camo',    color2: 0x2a3344, resist: { railgun: 0.2, shaft: 0.15 } },
-  { id: 'swamp',      name: 'Swamp',      price: 3200,  rank: 6,  color: 0x5c6b2f, pattern: 'camo',    color2: 0x3b4420, resist: { isida: 0.25, thunder: 0.1 } },
-  { id: 'urban',      name: 'Urban',      price: 4000,  rank: 7,  color: 0x8c8c8c, pattern: 'camo',    color2: 0x4a4a4a, resist: { hammer: 0.2, vulcan: 0.15 } },
-  { id: 'carbon',     name: 'Carbon',     price: 5500,  rank: 8,  color: 0x222428, pattern: 'carbon',  color2: 0x3a3d44, resist: { ricochet: 0.2, striker: 0.15 } },
-  { id: 'inferno',    name: 'Inferno',    price: 7000,  rank: 9,  color: 0xb3261e, pattern: 'flames',  color2: 0x1a0d0d, resist: { firebird: 0.4, thunder: 0.15 } },
-  { id: 'rustle',     name: 'Rustle',     price: 9000,  rank: 10, color: 0x7a4b2a, pattern: 'camo',    color2: 0xb57a45, resist: { firebird: 0.2, freeze: 0.2, isida: 0.2 } },
-  { id: 'gold',       name: 'Gold',       price: 12000, rank: 11, color: 0xf0c330, pattern: 'solid',   resist: { smoky: 0.1, twins: 0.1, railgun: 0.1, thunder: 0.1 } },
-  { id: 'moonwalker', name: 'Moonwalker', price: 16000, rank: 13, color: 0xcfd8e6, pattern: 'carbon',  color2: 0x6a7fa6, resist: { railgun: 0.3, shaft: 0.3, striker: 0.2 } },
+  { id: 'green',      name: 'Green',      price: 0,     rank: 0,  color: 0x5a6a3c, pattern: 'solid',   resist: {} },
+  { id: 'holiday',    name: 'Holiday',    price: 300,   rank: 1,  color: 0xb83f3a, pattern: 'stripes', color2: 0xd9d6cf, resist: {} },
+  { id: 'sandstone',  name: 'Sandstone',  price: 600,   rank: 2,  color: 0xb7a279, pattern: 'camo',    color2: 0x85704a, resist: { firebird: 0.15 } },
+  { id: 'forest',     name: 'Forest',     price: 900,   rank: 3,  color: 0x3f5c34, pattern: 'camo',    color2: 0x24381f, resist: { smoky: 0.15, twins: 0.1 } },
+  { id: 'arctic',     name: 'Arctic',     price: 1200,  rank: 3,  color: 0xdfe6ea, pattern: 'camo',    color2: 0x9aacb8, resist: { freeze: 0.3 } },
+  { id: 'flame',      name: 'Flame',      price: 1800,  rank: 4,  color: 0xd9641c, pattern: 'flames',  color2: 0x2e1a0a, resist: { firebird: 0.35 } },
+  { id: 'storm',      name: 'Storm',      price: 2500,  rank: 5,  color: 0x4a5567, pattern: 'camo',    color2: 0x2a313e, resist: { railgun: 0.2, shaft: 0.15 } },
+  { id: 'swamp',      name: 'Swamp',      price: 3200,  rank: 6,  color: 0x55602f, pattern: 'camo',    color2: 0x373f22, resist: { isida: 0.25, thunder: 0.1 } },
+  { id: 'urban',      name: 'Urban',      price: 4000,  rank: 7,  color: 0x7f8386, pattern: 'camo',    color2: 0x45484b, resist: { hammer: 0.2, vulcan: 0.15 } },
+  { id: 'carbon',     name: 'Carbon',     price: 5500,  rank: 8,  color: 0x24262a, pattern: 'carbon',  color2: 0x383b41, resist: { ricochet: 0.2, striker: 0.15 } },
+  { id: 'inferno',    name: 'Inferno',    price: 7000,  rank: 9,  color: 0x9c2a22, pattern: 'flames',  color2: 0x1a0e0d, resist: { firebird: 0.4, thunder: 0.15 } },
+  { id: 'rustle',     name: 'Rustle',     price: 9000,  rank: 10, color: 0x6f4a2d, pattern: 'camo',    color2: 0xa57545, resist: { firebird: 0.2, freeze: 0.2, isida: 0.2 } },
+  { id: 'gold',       name: 'Gold',       price: 12000, rank: 11, color: 0xd1a93a, pattern: 'solid',   resist: { smoky: 0.1, twins: 0.1, railgun: 0.1, thunder: 0.1 } },
+  { id: 'moonwalker', name: 'Moonwalker', price: 16000, rank: 13, color: 0xc3ccd6, pattern: 'carbon',  color2: 0x66789c, resist: { railgun: 0.3, shaft: 0.3, striker: 0.2 } },
 ];
 
 export const SUPPLIES = [

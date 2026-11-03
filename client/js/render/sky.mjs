@@ -1,80 +1,80 @@
-// Sky dome, sun, hemisphere light and fog for a map theme.
+// Physically based sky (atmospheric scattering), image based lighting, sun light with shadows, haze.
 import * as THREE from 'three';
+import { Sky } from 'three/addons/objects/Sky.js';
+import { Textures } from './textures.mjs';
 
-const vert = /* glsl */`
-  varying vec3 vDir;
-  void main() {
-    vDir = normalize(position);
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    gl_Position = projectionMatrix * mv;
-    gl_Position.z = gl_Position.w; // push to far plane
-  }
-`;
-const frag = /* glsl */`
-  uniform vec3 top; uniform vec3 horizon; uniform vec3 ground; uniform vec3 sunDir; uniform vec3 sunColor;
-  varying vec3 vDir;
-  void main() {
-    float h = vDir.y;
-    vec3 col;
-    if (h > 0.0) {
-      float t = pow(clamp(h, 0.0, 1.0), 0.55);
-      col = mix(horizon, top, t);
-    } else {
-      col = mix(horizon, ground, clamp(-h * 4.0, 0.0, 1.0));
-    }
-    float s = max(dot(normalize(vDir), normalize(sunDir)), 0.0);
-    col += sunColor * (pow(s, 600.0) * 1.2 + pow(s, 24.0) * 0.18 + pow(s, 4.0) * 0.05);
-    // faint cloud band
-    float cl = smoothstep(0.02, 0.35, h) * (1.0 - smoothstep(0.35, 0.9, h));
-    col = mix(col, col * 1.05 + 0.03, cl * 0.4);
-    gl_FragColor = vec4(col, 1.0);
-  }
-`;
-
-export function buildSky(theme, scene) {
+export function buildSky(theme, scene, renderer) {
   const sun = new THREE.Vector3(...theme.sun).normalize();
-  const geo = new THREE.SphereGeometry(1, 32, 20);
-  const mat = new THREE.ShaderMaterial({
-    uniforms: {
-      top: { value: new THREE.Color(theme.sky.top) },
-      horizon: { value: new THREE.Color(theme.sky.horizon) },
-      ground: { value: new THREE.Color(theme.sky.ground) },
-      sunDir: { value: sun.clone() },
-      sunColor: { value: new THREE.Color(theme.sunColor || 0xffffff) },
-    },
-    vertexShader: vert, fragmentShader: frag, side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false,
-  });
-  const dome = new THREE.Mesh(geo, mat);
-  dome.scale.setScalar(500);
-  dome.renderOrder = -1000;
-  dome.frustumCulled = false;
-  scene.add(dome);
+  const sky = new Sky();
+  sky.scale.setScalar(4000);
+  const u = sky.material.uniforms;
+  u.turbidity.value = theme.turbidity ?? 6;
+  u.rayleigh.value = theme.rayleigh ?? 2;
+  u.mieCoefficient.value = theme.mie ?? 0.005;
+  u.mieDirectionalG.value = 0.8;
+  u.sunPosition.value.copy(sun);
+  // scale the sky radiance down so it tone-maps to natural blues and stays under the bloom threshold
+  u.skyScale = { value: theme.skyScale ?? 0.42 };
+  sky.material.fragmentShader = 'uniform float skyScale;\n' + sky.material.fragmentShader.replace('gl_FragColor = vec4( texColor, 1.0 );', 'gl_FragColor = vec4( texColor * skyScale, 1.0 );');
+  sky.material.needsUpdate = true;
+  sky.renderOrder = -1000;
+  sky.frustumCulled = false;
 
-  scene.fog = new THREE.Fog(theme.fog.color, theme.fog.near, theme.fog.far);
-  scene.background = new THREE.Color(theme.sky.horizon);
+  // image based lighting from the same sky
+  let envTarget = null;
+  if (renderer) {
+    try {
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      const envScene = new THREE.Scene();
+      envScene.add(sky);
+      envTarget = pmrem.fromScene(envScene, 0.04);
+      envScene.remove(sky);
+      pmrem.dispose();
+      scene.environment = envTarget.texture;
+      scene.environmentIntensity = (theme.envIntensity ?? 0.55) * 1.8;
+    } catch (e) { console.warn('environment map failed', e); }
+  }
+  scene.add(sky);
+  scene.background = null;
+  scene.fog = new THREE.FogExp2(theme.fog.color, theme.fogDensity ?? 0.003);
 
-  const hemi = new THREE.HemisphereLight(theme.hemi[0], theme.hemi[1], theme.hemiIntensity || 0.8);
+  const hemi = new THREE.HemisphereLight(theme.hemi[0], theme.hemi[1], 0.22);
   scene.add(hemi);
-
-  const dir = new THREE.DirectionalLight(theme.sunColor || 0xffffff, theme.sunIntensity || 2);
+  const dir = new THREE.DirectionalLight(theme.sunColor || 0xfff4e0, theme.sunIntensity ?? 3.0);
   dir.castShadow = true;
   dir.shadow.mapSize.set(2048, 2048);
   dir.shadow.camera.near = 1;
-  dir.shadow.camera.far = 400;
-  const S = 75;
+  dir.shadow.camera.far = 420;
+  const S = 70;
   dir.shadow.camera.left = -S; dir.shadow.camera.right = S; dir.shadow.camera.top = S; dir.shadow.camera.bottom = -S;
-  dir.shadow.bias = -0.0006;
-  dir.shadow.normalBias = 0.03;
+  dir.shadow.camera.updateProjectionMatrix();
+  dir.shadow.bias = -0.00035;
+  dir.shadow.normalBias = 0.05;
+  dir.shadow.radius = 3;
   const target = new THREE.Object3D();
   scene.add(target);
   dir.target = target;
   scene.add(dir);
 
-  const ambient = new THREE.AmbientLight(0xffffff, 0.12);
-  scene.add(ambient);
+  // sun glare sprite
+  const glare = new THREE.Sprite(new THREE.SpriteMaterial({ map: Textures.get('glare'), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: false, opacity: 0.85 }));
+  glare.scale.set(260, 260, 1);
+  glare.renderOrder = -999;
+  scene.add(glare);
+
+  // procedural cloud layer: a large disc high above the map, slowly drifting
+  const cloudTex = Textures.get('clouds');
+  const cloudMat = new THREE.MeshBasicMaterial({ map: cloudTex, transparent: true, depthWrite: false, fog: false, opacity: theme.cloudOpacity ?? 0.75, side: THREE.DoubleSide });
+  const clouds = new THREE.Mesh(new THREE.CircleGeometry(2600, 48), cloudMat);
+  clouds.rotation.x = -Math.PI / 2;
+  clouds.position.y = 420;
+  clouds.renderOrder = -998;
+  clouds.frustumCulled = false;
+  cloudTex.repeat.set(6, 6);
+  scene.add(clouds);
 
   return {
-    dome, dir, hemi, sun,
+    sky, dir, hemi, sun, glare,
     setShadowQuality(level) {
       const size = level === 0 ? 0 : level === 1 ? 1024 : level === 2 ? 2048 : 4096;
       dir.castShadow = size > 0;
@@ -84,14 +84,20 @@ export function buildSky(theme, scene) {
       }
     },
     update(camera, focus) {
-      dome.position.copy(camera.position);
-      // keep the shadow frustum centred on the focus point, snapped to texels to avoid shimmer
+      sky.position.copy(camera.position);
+      glare.position.copy(camera.position).addScaledVector(sun, 900);
       const f = focus || camera.position;
       const texel = (S * 2) / dir.shadow.mapSize.x;
       const fx = Math.round(f.x / texel) * texel, fz = Math.round(f.z / texel) * texel;
       target.position.set(fx, f.y, fz);
-      dir.position.set(fx + sun.x * 180, f.y + sun.y * 180, fz + sun.z * 180);
+      dir.position.set(fx + sun.x * 200, f.y + sun.y * 200, fz + sun.z * 200);
       target.updateMatrixWorld();
+    },
+    dispose() {
+      if (envTarget) envTarget.dispose();
+      scene.environment = null;
+      sky.material.dispose();
+      sky.geometry.dispose();
     },
   };
 }

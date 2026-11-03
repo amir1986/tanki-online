@@ -209,10 +209,10 @@ export class Effects {
   explosion(pos, radius, kind) {
     const color = TURRET_COLORS[kind] || 0xffa040;
     const k = Math.max(1, radius / 4);
-    for (let i = 0; i < 30 * k; i++) {
+    for (let i = 0; i < 18 * k; i++) {
       const a = Math.random() * Math.PI * 2, e = Math.random() * Math.PI / 2;
       const s = rnd(3, 12) * k;
-      this.fire.emit({ pos, vel: [Math.cos(a) * Math.cos(e) * s, Math.sin(e) * s + 2, Math.sin(a) * Math.cos(e) * s], color: i % 3 === 0 ? 0xffffff : color, size: rnd(1.2, 2.6) * k, life: rnd(0.25, 0.6), drag: 4, grow: 2.5 });
+      this.fire.emit({ pos, vel: [Math.cos(a) * Math.cos(e) * s, Math.sin(e) * s + 2, Math.sin(a) * Math.cos(e) * s], color: i % 4 === 0 ? 0xffe0b0 : color, size: rnd(0.9, 2.0) * k, life: rnd(0.2, 0.5), drag: 4, grow: 2.2, alpha: 0.55 });
     }
     for (let i = 0; i < 25 * k; i++) {
       const a = Math.random() * Math.PI * 2, e = Math.random() * Math.PI / 2;

@@ -26,10 +26,13 @@ page.on('response', (r) => { if (r.status() >= 400) console.log('[http ' + r.sta
 const shot = (name) => page.screenshot({ path: `${outDir}/${name}.png` });
 const state = () => page.evaluate(() => ({ screen: window.app.screen, battle: !!window.app.battle, alive: window.app.battle?.me?.alive, pos: window.app.battle?.me?.pos, tanks: window.app.battle?.tanks.size, snaps: window.app.battle?.snaps.length, paused: window.app.paused, profile: window.app.profile && { name: window.app.profile.name, crystals: window.app.profile.crystals, xp: window.app.profile.xp } }));
 
-await page.goto(`${base}/?name=E2E_Tester`, { waitUntil: 'load' });
+const nick = 'E2E_' + (Date.now() % 1000000).toString(36); // fresh profile every run (full supply stock)
+await page.goto(`${base}/?name=${nick}`, { waitUntil: 'load' });
 await sleep(5000);
 let s = await state();
 check('menu shown', s.screen === 'menu', JSON.stringify(s.profile));
+// software rendering in headless Chrome is slow: use the low preset so the game loop keeps up
+await page.evaluate(() => window.app.setSettings({ quality: 'low', scale: 0.5, shadows: 0, bloom: false, ao: false }));
 await shot('01-menu');
 
 // lobby
@@ -54,7 +57,7 @@ const turretTab = await page.$('.garage-tabs button[data-tab="turret"]');
 await turretTab.click(); await sleep(400);
 const cardsG = await page.$$('#garage-list .item-card');
 check('garage lists turrets', cardsG.length === 12, `${cardsG.length} items`);
-await cardsG[1].click(); await sleep(400); // firebird (1000 crystals, rank 1 -> locked at rank 0)
+await page.click('#garage-list .item-card:nth-child(2)'); await sleep(400); // firebird (1000 crystals, rank 1 -> locked at rank 0)
 await shot('04-garage');
 await page.click('#garage-back'); await sleep(300);
 
@@ -91,9 +94,13 @@ check('tank fires with Space', shots >= 2, `${shots} shots`);
 await shot('06-battle-firing');
 
 // supply use (repair when full hp -> rejected; use nitro instead)
-await page.keyboard.press('Digit4');
-await sleep(800);
-const nitro = await page.evaluate(() => !!(window.app.battle.me.state && (window.app.battle.me.state.flags & 8)));
+let nitro = false;
+for (let attempt = 0; attempt < 3 && !nitro; attempt++) {
+  for (let w = 0; w < 20 && !(await state()).alive; w++) await sleep(500); // supplies only work while alive
+  await page.keyboard.press('Digit4');
+  await sleep(1500);
+  nitro = await page.evaluate(() => { const b = window.app.battle; return !!b.cooldowns.nitro || !!(b.me.state && (b.me.state.flags & 8)); });
+}
 check('nitro supply activates', nitro);
 
 // chat
@@ -103,7 +110,7 @@ const chatText = await page.$eval('#hud-chat-log', (el) => el.textContent);
 check('chat message delivered', chatText.includes('gl hf'));
 
 // scoreboard
-await page.keyboard.down('Tab'); await sleep(300);
+await page.keyboard.down('Tab'); await sleep(1200);
 const sbVisible = await page.$eval('#hud-scoreboard', (el) => !el.classList.contains('hidden'));
 await shot('07-scoreboard');
 await page.keyboard.up('Tab');
