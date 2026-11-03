@@ -1,14 +1,47 @@
-// Terrain mesh built from the shared heightfield, shaded with three blended PBR layers (base / dirt / rock).
+// Terrain mesh built from the shared heightfield, shaded with three blended PBR layers (base / dirt / rock)
+// from scanned CC0 texture sets, with macro variation to hide tiling.
 import * as THREE from 'three';
 import { Textures } from './textures.mjs';
 import { fbm } from '/shared/noise.mjs';
 
-const THEMES = {
-  grass: { base: 'grass', dirt: 'dirt', rock: 'rock', scale: 6.5, dirtScale: 5.5, rockScale: 7, tint: [0xffffff, 0xd9dccb], rockSlope: [0.32, 0.72], patch: 0.6 },
-  sand: { base: 'sand', dirt: 'dirt', rock: 'rock', scale: 5.5, dirtScale: 5, rockScale: 7, tint: [0xffffff, 0xe6ddc8], rockSlope: [0.5, 0.9], patch: 0.72 },
-  snow: { base: 'snow', dirt: 'rock', rock: 'rock', scale: 6, dirtScale: 7, rockScale: 7, tint: [0xffffff, 0xeaf0f5], rockSlope: [0.3, 0.6], patch: 0.9 },
-  asphalt: { base: 'asphalt', dirt: 'dirt', rock: 'concrete', scale: 5, dirtScale: 5, rockScale: 4, tint: [0xffffff, 0xd8d8d8], rockSlope: [0.6, 0.95], patch: 0.78 },
+export const THEMES = {
+  grass: { base: 'grass', dirt: 'dirt', rock: 'rockMoss', scale: 3.2, dirtScale: 3.4, rockScale: 4.6, tint: [0xffffff, 0xe3e6d6], rockSlope: [0.32, 0.72], patch: 0.6 },
+  sand: { base: 'sand', dirt: 'dirtDry', rock: 'rock', scale: 3.4, dirtScale: 3.4, rockScale: 4.6, tint: [0xffffff, 0xece4d2], rockSlope: [0.5, 0.9], patch: 0.72 },
+  snow: { base: 'snow', dirt: 'snowDirty', rock: 'rock', scale: 3.6, dirtScale: 3.6, rockScale: 4.6, tint: [0xffffff, 0xeef2f6], rockSlope: [0.3, 0.6], patch: 0.9 },
+  asphalt: { base: 'asphaltDark', dirt: 'gravel', rock: 'concrete', scale: 4.2, dirtScale: 3.2, rockScale: 3.5, tint: [0xffffff, 0xe0e0e0], rockSlope: [0.6, 0.95], patch: 0.78 },
 };
+
+const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+function roadMaskFor(map) {
+  const roads = map.theme.roads || [];
+  return (x, z) => {
+    let m = 0;
+    for (const r of roads) {
+      const ax = r.a[0], az = r.a[1], bx = r.b[0], bz = r.b[1];
+      const dx = bx - ax, dz = bz - az, len2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / len2));
+      const d = Math.hypot(x - (ax + dx * t), z - (az + dz * t));
+      m = Math.max(m, 1 - Math.min(1, Math.max(0, (d - r.w * 0.5) / (r.w * 0.5))));
+    }
+    return m;
+  };
+}
+
+/** Layer weights at a world position: { dirt, rock, slope, n2 } — shared by the terrain shader and foliage scatter. */
+export function terrainBlend(map, x, z, roadMask = roadMaskFor(map)) {
+  const theme = THEMES[map.theme.ground] || THEMES.grass;
+  const cell = map.cell;
+  const hx = map.heightAt(Math.min(map.halfW - 0.01, x + cell), z) - map.heightAt(Math.max(-map.halfW + 0.01, x - cell), z);
+  const hz = map.heightAt(x, Math.min(map.halfL - 0.01, z + cell)) - map.heightAt(x, Math.max(-map.halfL + 0.01, z - cell));
+  const slope = Math.hypot(hx, hz) / (2 * cell);
+  const rock = smooth(theme.rockSlope[0], theme.rockSlope[1], slope);
+  const n = fbm(x / 21 + 7, z / 21 + 3, 900, 3);
+  const n2 = fbm(x / 7 + 1, z / 7 + 9, 901, 2);
+  let dirt = smooth(theme.patch, theme.patch + 0.12, n * 0.75 + n2 * 0.25) * (1 - rock);
+  dirt = Math.max(dirt, roadMask(x, z) * (1 - rock));
+  return { dirt, rock, slope, n2 };
+}
 
 export function buildTerrain(map) {
   const theme = THEMES[map.theme.ground] || THEMES.grass;
@@ -22,19 +55,7 @@ export function buildTerrain(map) {
   const blend = new Float32Array(nx * nz * 2);
   const ca = new THREE.Color(theme.tint[0]), cb = new THREE.Color(theme.tint[1]);
   const tmp = new THREE.Color();
-  const roads = map.theme.roads || [];
-  const roadMask = (x, z) => {
-    let m = 0;
-    for (const r of roads) {
-      const ax = r.a[0], az = r.a[1], bx = r.b[0], bz = r.b[1];
-      const dx = bx - ax, dz = bz - az, len2 = dx * dx + dz * dz || 1;
-      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / len2));
-      const px = ax + dx * t, pz = az + dz * t;
-      const d = Math.hypot(x - px, z - pz);
-      m = Math.max(m, 1 - Math.min(1, Math.max(0, (d - r.w * 0.5) / (r.w * 0.5))));
-    }
-    return m;
-  };
+  const roadMask = roadMaskFor(map);
   let k = 0;
   for (let j = 0; j < nz; j++) {
     for (let i = 0; i < nx; i++) {
@@ -42,17 +63,10 @@ export function buildTerrain(map) {
       const y = map.heightAt(x, z);
       positions[k * 3] = x; positions[k * 3 + 1] = y; positions[k * 3 + 2] = z;
       uvs[k * 2] = x / theme.scale; uvs[k * 2 + 1] = z / theme.scale;
-      const hx = map.heightAt(Math.min(halfW - 0.01, x + cell), z) - map.heightAt(Math.max(-halfW + 0.01, x - cell), z);
-      const hz = map.heightAt(x, Math.min(halfL - 0.01, z + cell)) - map.heightAt(x, Math.max(-halfL + 0.01, z - cell));
-      const slope = Math.hypot(hx, hz) / (2 * cell);
-      const rockW = smooth(theme.rockSlope[0], theme.rockSlope[1], slope);
-      const n = fbm(x / 21 + 7, z / 21 + 3, 900, 3);
-      const n2 = fbm(x / 7 + 1, z / 7 + 9, 901, 2);
-      let dirtW = smooth(theme.patch, theme.patch + 0.12, n * 0.75 + n2 * 0.25) * (1 - rockW);
-      dirtW = Math.max(dirtW, roadMask(x, z) * (1 - rockW));
-      blend[k * 2] = dirtW; blend[k * 2 + 1] = rockW;
+      const b = terrainBlend(map, x, z, roadMask);
+      blend[k * 2] = b.dirt; blend[k * 2 + 1] = b.rock;
       tmp.copy(ca).lerp(cb, fbm(x / 33 + 5, z / 33 + 2, 902, 2));
-      const v = 0.94 + 0.12 * n2;
+      const v = 0.95 + 0.1 * b.n2;
       colors[k * 3] = tmp.r * v; colors[k * 3 + 1] = tmp.g * v; colors[k * 3 + 2] = tmp.b * v;
       k++;
     }
@@ -73,7 +87,10 @@ export function buildTerrain(map) {
   geo.computeVertexNormals();
   geo.computeBoundingSphere();
 
-  const mat = new THREE.MeshStandardMaterial({ map: base.map, normalMap: base.normal, normalScale: new THREE.Vector2(1, 1), vertexColors: true, roughness: 0.96, metalness: 0.0 });
+  const mat = new THREE.MeshStandardMaterial({
+    map: base.map, normalMap: base.normal, normalScale: new THREE.Vector2(1, 1), vertexColors: true,
+    roughness: 1, roughnessMap: base.rough || null, aoMap: base.ao || null, aoMapIntensity: 0.8, metalness: 0.0,
+  });
   const uvMul2 = theme.scale / theme.dirtScale, uvMul3 = theme.scale / theme.rockScale;
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.map2 = { value: dirt.map };
@@ -94,7 +111,7 @@ export function buildTerrain(map) {
         vec4 sampledDiffuseColor = mix( mix( c1, c2, vBlend.x ), c3, vBlend.y );
         float macro = texture2D( map, vMapUv * 0.047 ).g;
         float macro2 = texture2D( map2, vMapUv * 0.013 + 0.37 ).r;
-        sampledDiffuseColor.rgb *= ( 0.84 + 0.32 * macro ) * ( 0.9 + 0.2 * macro2 );
+        sampledDiffuseColor.rgb *= ( 0.86 + 0.28 * macro ) * ( 0.92 + 0.16 * macro2 );
         diffuseColor *= sampledDiffuseColor;
       `)
       .replace('#include <normal_fragment_maps>', `
@@ -106,7 +123,7 @@ export function buildTerrain(map) {
         normal = normalize( tbn * mapN );
       `);
   };
-  mat.customProgramCacheKey = () => 'terrain3layer';
+  mat.customProgramCacheKey = () => 'terrain3layer' + (base.rough ? 'R' : '') + (base.ao ? 'A' : '');
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
   mesh.castShadow = false;
@@ -116,7 +133,7 @@ export function buildTerrain(map) {
   const skirtGeo = new THREE.PlaneGeometry(2400, 2400, 1, 1);
   skirtGeo.rotateX(-Math.PI / 2);
   const skirtMap = base.map.clone(); skirtMap.repeat.set(2400 / theme.scale, 2400 / theme.scale); skirtMap.needsUpdate = true;
-  const skirt = new THREE.Mesh(skirtGeo, new THREE.MeshStandardMaterial({ color: 0xbdbdbd, map: skirtMap, roughness: 1 }));
+  const skirt = new THREE.Mesh(skirtGeo, new THREE.MeshStandardMaterial({ color: 0xb5b5b5, map: skirtMap, roughness: 1 }));
   skirt.position.y = map.minH - 0.8;
   skirt.receiveShadow = true;
   skirt.name = 'skirt';
@@ -124,5 +141,3 @@ export function buildTerrain(map) {
   group.add(skirt, mesh);
   return group;
 }
-
-function smooth(a, b, x) { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }

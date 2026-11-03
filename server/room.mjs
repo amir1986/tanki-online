@@ -6,8 +6,13 @@ import {
   DROP_INTERVAL, DROP_LIFETIME, GOLD_INTERVAL_MIN, GOLD_INTERVAL_MAX, GOLD_WARNING, GOLD_REWARD, DROP_FALL_SPEED,
   SCORE, FUND_PER_KILL, FUND_BASE, BATTLE_DEFAULTS, KILL_Y, TF,
   JUGGERNAUT_HP_MULT, JUGGERNAUT_DAMAGE_MULT, JUGGERNAUT_KILL_SCORE,
+  BALL_PICKUP_RADIUS, BALL_THROW_SPEED, BALL_RESET_DELAY, GOAL_RADIUS, SIEGE_ROUND_SECONDS, SIEGE_CAPTURE_SECONDS, SIEGE_POINT_RADIUS,
+  CONTAINER_XP, MISSIONS_PER_CONTAINER,
 } from '../shared/constants.mjs';
-import { addMissionProgress } from '../shared/missions.mjs';
+import { addMissionProgress, dayKey } from '../shared/missions.mjs';
+import { getDrone } from '../shared/drones.mjs';
+import { applyAugment } from '../shared/augments.mjs';
+import { MASK_STATIC } from '../shared/sim/world.mjs';
 import { hullStats, turretStats, getPaint, rankForXp, rankUpBonus } from '../shared/items.mjs';
 import { buildMap, randomSpawn } from '../shared/maps.mjs';
 import { PhysWorld } from '../shared/sim/world.mjs';
@@ -31,6 +36,8 @@ export class Room {
     this.mode = MODES[this.opts.mode] ? this.opts.mode : 'DM';
     this.map = finalizeMap(buildMap(this.opts.map));
     this.name = this.opts.name || `${this.map.name} ${this.mode}`;
+    if (this.mode === 'SGE' && this.opts.scoreLimit > 9) this.opts.scoreLimit = 3;
+    if (this.mode === 'RGB' && this.opts.scoreLimit > 15) this.opts.scoreLimit = 5;
     this.hooks = hooks;
     this.pw = new PhysWorld(this.map);
     this.rng = mulberry32((this.opts.seed ?? (Date.now() & 0xffffff)) >>> 0);
@@ -73,6 +80,12 @@ export class Room {
       blue: { state: 0, pos: [...this.map.flags.blue], carrier: null, droppedAt: 0 },
     };
     this.points = this.map.points.map((p) => ({ id: p.id, pos: p.pos, owner: 0, cap: 0, capTeam: 0 }));
+    this.ball = this.mode === 'RGB' ? this.newBall() : null;
+    this.siege = null;
+    if (this.mode === 'SGE') {
+      this.siege = { attacker: 1, round: 1, roundEnd: SIEGE_ROUND_SECONDS };
+      this.points = [this.siegePoint()];
+    }
     this.cpTimer = 0;
     this.dropTimer = 15;
     this.goldTimer = GOLD_INTERVAL_MIN + this.rng() * (GOLD_INTERVAL_MAX - GOLD_INTERVAL_MIN);
@@ -95,7 +108,13 @@ export class Room {
   mission(p, type, amount) {
     if (!p || !p.profile || amount <= 0) return;
     const done = addMissionProgress(p.profile, type, amount, this.mode);
-    for (const m of done) this.events.push({ e: 'mission', p: p.id, text: m.text, reward: m.reward });
+    for (const m of done) {
+      this.events.push({ e: 'mission', p: p.id, text: m.text, reward: m.reward });
+      if ((p.profile.missions.completedTotal | 0) % MISSIONS_PER_CONTAINER === 0) {
+        p.profile.containers = (p.profile.containers | 0) + 1;
+        this.events.push({ e: 'container', p: p.id, why: 'missions' });
+      }
+    }
     if (done.length) this.profileDirty(p);
   }
 
@@ -145,6 +164,7 @@ export class Room {
       id: p.id, name: p.name, team: p.team, bot: p.isBot, rank: p.rank,
       hull: p.equip.hull, hullMod: p.equip.hullMod, turret: p.equip.turret, turretMod: p.equip.turretMod, paint: p.equip.paint,
       maxHp: p.maxHp, score: p.score, kills: p.kills, deaths: p.deaths, jugger: !!p.jugger,
+      clan: p.clanTag || null, drone: p.equip.drone || null, augment: p.equip.augment || null,
     }));
   }
 
@@ -161,7 +181,8 @@ export class Room {
     const id = this.nextPid++;
     const p = {
       id, name, team, isBot, client: client || null, profile: profile || null, rank: rank || 0,
-      equip: { hull: 'wasp', hullMod: 0, turret: 'smoky', turretMod: 0, paint: 'green', ...equip },
+      equip: { hull: 'wasp', hullMod: 0, turret: 'smoky', turretMod: 0, paint: 'green', augment: null, drone: null, ...equip },
+      clanTag: profile && profile.clan ? profile.clan.tag : null, drone: null, droneCd: 0,
       hull: null, turret: null, paint: null, sim: null, alive: false, hp: 0, maxHp: 100,
       respawnAt: this.time + 1, protectedUntil: 0, deadSince: 0,
       controls: { f: 0, t: 0, tt: 0, fire: false, yaw: null, seq: 0 },
@@ -177,7 +198,11 @@ export class Room {
 
   applyEquipStats(p) {
     p.hull = hullStats(p.equip.hull, p.equip.hullMod);
-    p.turret = turretStats(p.equip.turret, p.equip.turretMod);
+    let ts = turretStats(p.equip.turret, p.equip.turretMod);
+    if (p.equip.augment) ts = applyAugment(ts, p.equip.augment);
+    p.drone = getDrone(p.equip.drone);
+    if (p.drone && p.drone.reload && ts.cooldown) ts = { ...ts, cooldown: +(ts.cooldown * (1 - p.drone.reload)).toFixed(3) };
+    p.turret = ts;
     p.paint = getPaint(p.equip.paint);
     p.maxHp = p.jugger ? Math.round(p.hull.hp * JUGGERNAUT_HP_MULT) + 200 : p.hull.hp;
   }
@@ -191,7 +216,7 @@ export class Room {
     }
     const p = this.makePlayer({
       name: profile.name, team, isBot: false, client, profile,
-      equip: { hull: profile.equipped.hull, hullMod: profile.hulls[profile.equipped.hull] | 0, turret: profile.equipped.turret, turretMod: profile.turrets[profile.equipped.turret] | 0, paint: profile.equipped.paint },
+      equip: { hull: profile.equipped.hull, hullMod: profile.hulls[profile.equipped.hull] | 0, turret: profile.equipped.turret, turretMod: profile.turrets[profile.equipped.turret] | 0, paint: profile.equipped.paint, augment: (profile.augments && profile.augments[profile.equipped.turret]) || null, drone: profile.equipped.drone || null },
       rank: rankForXp(profile.xp).index,
     });
     p.respawnAt = this.time + 1.0;
@@ -286,7 +311,8 @@ export class Room {
     p.sim = new TankSim(this.pw, p.hull, s.pos, s.yaw, p);
     p.hp = p.maxHp;
     p.alive = true;
-    p.protectedUntil = this.time + SPAWN_PROTECTION;
+    p.protectedUntil = this.time + SPAWN_PROTECTION + (p.drone && p.drone.extraProtection ? p.drone.extraProtection : 0);
+    p.droneCd = 0;
     p.turretYaw = 0;
     p.w = newWeaponState(p.turret);
     p.fx = freshFx();
@@ -302,12 +328,15 @@ export class Room {
     victim.alive = false;
     victim.deaths++;
     victim.deadSince = this.time;
-    victim.respawnAt = this.time + RESPAWN_DELAY;
+    victim.respawnAt = this.time + RESPAWN_DELAY + (this.siege && victim.team ? (victim.team !== this.siege.attacker ? 6 : -1.5) : 0);
     const pos = victim.sim ? victim.sim.pos : victim.lastPos || [0, 0, 0];
     victim.lastPos = pos;
     if (victim.sim) { victim.sim.destroy(); victim.sim = null; }
     if (victim.flag) this.dropFlag(victim, pos);
+    if (this.ball && this.ball.carrier === victim.id) this.dropBall(pos);
     this.events.push({ e: 'kill', v: victim.id, a: killer ? killer.id : -1, k: turretId, p: pos.map((v) => +v.toFixed(2)) });
+    if (killer && killer !== victim && killer.drone && killer.drone.bonus) killer.fx.hyperionUntil = this.time + killer.drone.duration;
+    if (turretId === 'self' && victim.drone && victim.drone.selfDestructBlast) this.explode([pos[0], pos[1] + 0.3, pos[2]], 6, 90, 0.4, victim, 'mine', null);
     if (victim.profile) { victim.profile.stats.deaths++; this.profileDirty(victim); }
     if (killer && killer !== victim) {
       killer.kills++;
@@ -349,6 +378,14 @@ export class Room {
       const before = rankForXp(p.profile.xp).index;
       p.profile.xp = Math.max(0, p.profile.xp + n);
       p.profile.stats.score += n;
+      if (n > 0) {
+        p.profile.containerXp = (p.profile.containerXp | 0) + n;
+        while (p.profile.containerXp >= CONTAINER_XP) {
+          p.profile.containerXp -= CONTAINER_XP;
+          p.profile.containers = (p.profile.containers | 0) + 1;
+          this.events.push({ e: 'container', p: p.id, why: 'experience' });
+        }
+      }
       const after = rankForXp(p.profile.xp);
       if (after.index > before) {
         p.profile.crystals += rankUpBonus(after.index);
@@ -373,7 +410,9 @@ export class Room {
     let dmg = amount;
     if (attacker && attacker.fx.dd > this.time) dmg *= 2;
     if (attacker && attacker.jugger) dmg *= JUGGERNAUT_DAMAGE_MULT;
+    if (attacker && attacker.fx.hyperionUntil > this.time && attacker.drone && attacker.drone.bonus) dmg *= 1 + attacker.drone.bonus;
     if (target.fx.da > this.time) dmg *= 0.5;
+    if (target.drone && target.drone.lowHpThreshold && target.hp < target.maxHp * target.drone.lowHpThreshold) dmg *= 1 - target.drone.lowHpReduction;
     const res = (target.paint.resist && target.paint.resist[turretId]) || 0;
     dmg *= 1 - res;
     if (dmg <= 0) return 0;
@@ -649,6 +688,174 @@ export class Room {
     }
   }
 
+  // ---- rugby ------------------------------------------------------------------------
+  newBall() {
+    const c = this.map.points[0] ? this.map.points[0].pos : [0, this.map.surfaceAt(0, 0), 0];
+    return { pos: [c[0], c[1] + 0.6, c[2]], vel: [0, 0, 0], carrier: null, resetAt: 0, lastThrow: -10, lastCarrier: null, frozen: false };
+  }
+
+  ballPos(p) {
+    return [p.sim.pos[0], p.sim.pos[1] + p.sim.size[1] / 2 + 1.0, p.sim.pos[2]];
+  }
+
+  dropBall(pos) {
+    const b = this.ball;
+    if (!b) return;
+    b.carrier = null;
+    b.pos = [pos[0], pos[1] + 1.2, pos[2]];
+    b.vel = [(this.rng() - 0.5) * 4, 5, (this.rng() - 0.5) * 4];
+    this.events.push({ e: 'ball', a: 'dropped' });
+  }
+
+  throwBall(p) {
+    const b = this.ball;
+    if (!b || b.carrier !== p.id || !p.sim) return;
+    const dir = p.sim.turretDir();
+    const v = p.sim.velocity;
+    b.carrier = null;
+    b.lastCarrier = p.id;
+    b.lastThrow = this.time;
+    b.pos = [p.sim.pos[0] + dir[0] * 2.2, p.sim.pos[1] + p.sim.size[1] / 2 + 1.0, p.sim.pos[2] + dir[2] * 2.2];
+    b.vel = [dir[0] * BALL_THROW_SPEED + v[0] * 0.5, 7, dir[2] * BALL_THROW_SPEED + v[2] * 0.5];
+    this.events.push({ e: 'ball', a: 'thrown', p: p.id });
+  }
+
+  updateRugby(dt) {
+    const b = this.ball;
+    if (!b) return;
+    const t = this.time;
+    if (b.frozen) {
+      if (t >= b.resetAt) { this.ball = this.newBall(); this.events.push({ e: 'ball', a: 'reset' }); }
+      return;
+    }
+    if (b.carrier != null) {
+      const c = this.players.get(b.carrier);
+      if (!c || !c.alive || !c.sim) { this.dropBall(c && c.lastPos ? c.lastPos : b.pos); return; }
+      b.pos = this.ballPos(c);
+      const goal = this.map.flags[c.team === 1 ? 'blue' : 'red'];
+      if (vdistXZ(c.sim.pos, goal) < GOAL_RADIUS) {
+        this.teamScore[c.team]++;
+        c.caps++;
+        this.addScore(c, SCORE.GOAL, 'goal');
+        this.mission(c, 'goals', 1);
+        if (c.profile) { c.profile.stats.goals = (c.profile.stats.goals | 0) + 1; }
+        this.events.push({ e: 'ball', a: 'goal', p: c.id, team: c.team });
+        b.carrier = null;
+        b.frozen = true;
+        b.resetAt = t + BALL_RESET_DELAY;
+        this.rosterDirty = true;
+        this.checkEnd();
+      }
+      return;
+    }
+    // free ball physics
+    const prev = b.pos;
+    b.vel = [b.vel[0], b.vel[1] - 22 * dt, b.vel[2]];
+    let next = [prev[0] + b.vel[0] * dt, prev[1] + b.vel[1] * dt, prev[2] + b.vel[2] * dt];
+    const hit = this.pw.raycast(prev, next, { mask: MASK_STATIC });
+    if (hit && hit.normal[1] < 0.7) {
+      const n = hit.normal;
+      const dot = b.vel[0] * n[0] + b.vel[1] * n[1] + b.vel[2] * n[2];
+      b.vel = [(b.vel[0] - 2 * dot * n[0]) * 0.55, (b.vel[1] - 2 * dot * n[1]) * 0.55, (b.vel[2] - 2 * dot * n[2]) * 0.55];
+      next = [hit.point[0] + n[0] * 0.5, hit.point[1] + n[1] * 0.5, hit.point[2] + n[2] * 0.5];
+      this.events.push({ e: 'bounce', k: 'ball', p: next.map((v) => +v.toFixed(2)), n: n.map((v) => +v.toFixed(2)) });
+    }
+    const m = this.map;
+    next[0] = clamp(next[0], -m.halfW + 1, m.halfW - 1);
+    next[2] = clamp(next[2], -m.halfL + 1, m.halfL - 1);
+    if (Math.abs(next[0]) >= m.halfW - 1) b.vel[0] = -b.vel[0] * 0.5;
+    if (Math.abs(next[2]) >= m.halfL - 1) b.vel[2] = -b.vel[2] * 0.5;
+    const gy = m.surfaceAt(next[0], next[2]) + 0.45;
+    let onGround = false;
+    if (next[1] <= gy) {
+      next[1] = gy;
+      if (b.vel[1] < -1) b.vel[1] = -b.vel[1] * 0.45; else b.vel[1] = 0;
+      onGround = true;
+    }
+    if (onGround) { const f = Math.max(0, 1 - 1.6 * dt); b.vel[0] *= f; b.vel[2] *= f; }
+    b.pos = next;
+    // a thrown or bouncing ball entering a goal scores for the last team that touched it
+    const last = b.lastCarrier != null ? this.players.get(b.lastCarrier) : null;
+    if (last && last.team) {
+      const goal = this.map.flags[last.team === 1 ? 'blue' : 'red'];
+      if (vdistXZ(b.pos, goal) < GOAL_RADIUS && Math.abs(b.pos[1] - goal[1]) < 4) {
+        this.teamScore[last.team]++;
+        last.caps++;
+        this.addScore(last, SCORE.GOAL, 'goal');
+        this.mission(last, 'goals', 1);
+        if (last.profile) last.profile.stats.goals = (last.profile.stats.goals | 0) + 1;
+        this.events.push({ e: 'ball', a: 'goal', p: last.id, team: last.team });
+        b.frozen = true;
+        b.resetAt = t + BALL_RESET_DELAY;
+        this.rosterDirty = true;
+        this.checkEnd();
+        return;
+      }
+    }
+    // pickup
+    for (const p of this.alivePlayers()) {
+      if (!p.team) continue;
+      if (p.id === b.lastCarrier && t - b.lastThrow < 1.0) continue;
+      if (vdistXZ(p.sim.pos, b.pos) < BALL_PICKUP_RADIUS && Math.abs(p.sim.pos[1] - b.pos[1]) < 3) {
+        b.carrier = p.id;
+        b.vel = [0, 0, 0];
+        this.addScore(p, SCORE.BALL_PICKUP, 'ball');
+        this.events.push({ e: 'ball', a: 'taken', p: p.id });
+        break;
+      }
+    }
+  }
+
+  // ---- siege ------------------------------------------------------------------------
+  siegePoint() {
+    const defender = this.siege.attacker === 1 ? 'blue' : 'red';
+    const base = this.map.flags[defender];
+    // pull the point out of the spawn area toward the middle of the map
+    const d = Math.hypot(base[0], base[2]) || 1;
+    const x = base[0] - (base[0] / d) * 16, z = base[2] - (base[2] / d) * 16;
+    return { id: 'S', pos: [x, this.map.surfaceAt(x, z), z], owner: this.siege.attacker === 1 ? 2 : 1, cap: 0, capTeam: this.siege.attacker };
+  }
+
+  nextSiegeRound() {
+    const s = this.siege;
+    s.attacker = s.attacker === 1 ? 2 : 1;
+    s.round++;
+    s.roundEnd = this.time + SIEGE_ROUND_SECONDS;
+    this.points = [this.siegePoint()];
+    this.events.push({ e: 'siege', a: 'start', team: s.attacker, round: s.round });
+    this.rosterDirty = true;
+    this.checkEnd();
+  }
+
+  updateSiege(dt) {
+    const s = this.siege;
+    if (!s) return;
+    const pt = this.points[0];
+    const defender = s.attacker === 1 ? 2 : 1;
+    let att = 0, def = 0;
+    const present = [];
+    for (const p of this.alivePlayers()) {
+      if (!p.team) continue;
+      if (vdistXZ(p.sim.pos, pt.pos) < SIEGE_POINT_RADIUS && Math.abs(p.sim.pos[1] - pt.pos[1]) < 6) { present.push(p); if (p.team === s.attacker) att++; else def++; }
+    }
+    pt.capTeam = s.attacker;
+    if (att > 0 && att >= def) pt.cap = Math.min(1, pt.cap + (dt / SIEGE_CAPTURE_SECONDS) * Math.sqrt(att) * (att > def ? 1 : 0.5));
+    else if (def > att) pt.cap = Math.max(0, pt.cap - (dt / SIEGE_CAPTURE_SECONDS) * 0.5);
+    if (pt.cap >= 1) {
+      this.teamScore[s.attacker]++;
+      for (const p of present) if (p.team === s.attacker) { this.addScore(p, SCORE.SIEGE_CAPTURE, 'siege'); this.mission(p, 'sieges', 1); if (p.profile) p.profile.stats.sieges = (p.profile.stats.sieges | 0) + 1; }
+      this.events.push({ e: 'siege', a: 'captured', team: s.attacker, round: s.round });
+      this.nextSiegeRound();
+      return;
+    }
+    if (this.time >= s.roundEnd) {
+      this.teamScore[defender]++;
+      for (const p of this.players.values()) if (p.team === defender) { this.addScore(p, SCORE.SIEGE_DEFEND, 'siege'); this.mission(p, 'sieges', 1); }
+      this.events.push({ e: 'siege', a: 'held', team: defender, round: s.round });
+      this.nextSiegeRound();
+    }
+  }
+
   // ---- end of battle ----------------------------------------------------------------
   checkEnd() {
     if (this.state !== 'running') return;
@@ -675,11 +882,16 @@ export class Room {
     const results = players.map((p) => {
       const share = Math.max(0, p.score) / totalScore;
       const won = this.teams ? p.team === winner : p.id === winner;
-      const crystals = Math.round(this.fund * share * (won ? 1.25 : 1));
+      const crystals = Math.round(this.fund * share * (won ? 1.25 : 1) * (p.drone && p.drone.crystals ? 1 + p.drone.crystals : 1));
       if (p.profile) {
         p.profile.crystals += crystals;
         p.profile.stats.battles++;
         if (won) p.profile.stats.wins++;
+        if (won && !this.opts.training && p.profile.lastWinDay !== dayKey()) {
+          p.profile.lastWinDay = dayKey();
+          p.profile.containers = (p.profile.containers | 0) + 1;
+          this.events.push({ e: 'container', p: p.id, why: 'first win of the day' });
+        }
         this.mission(p, 'battles', 1);
         if (won) this.mission(p, 'wins', 1);
         this.profileDirty(p);
@@ -769,7 +981,7 @@ export class Room {
     // movement
     for (const p of this.alivePlayers()) {
       const frozen = p.fx.frozenUntil > t ? p.fx.frozenFactor : 1;
-      const nitro = p.fx.nitro > t ? 1.3 : 1;
+      const nitro = (p.fx.nitro > t ? 1.3 : 1) * (p.drone && p.drone.speed ? 1 + p.drone.speed : 1);
       const sniper = p.w && p.w.sniper;
       const mods = { speedMult: frozen * nitro * (sniper ? 0 : 1), accelMult: nitro * (sniper ? 0.2 : 1), turnMult: frozen * (sniper ? 0.3 : 1) };
       const c = this.state === 'running' ? p.controls : { f: 0, t: 0, tt: 0 };
@@ -790,7 +1002,17 @@ export class Room {
 
     if (this.state === 'running') {
       for (const p of this.alivePlayers()) {
-        updateWeapon(this, p, dt);
+        const carrying = this.ball && this.ball.carrier === p.id;
+        if (carrying) {
+          // the ball carrier cannot shoot; fire throws the ball instead
+          const wantFire = p.controls.fire;
+          p.controls.fire = false;
+          updateWeapon(this, p, dt);
+          p.controls.fire = wantFire;
+          if (wantFire && t - this.ball.lastThrow > 0.6) this.throwBall(p);
+        } else {
+          updateWeapon(this, p, dt);
+        }
         if (p.w && (p.w.firing || p.w.idle === 0) && p.protectedUntil > t) p.protectedUntil = t;
       }
       updateProjectiles(this, dt);
@@ -799,6 +1021,8 @@ export class Room {
       this.updateEffects(dt);
       if (this.mode === 'CTF') this.updateCTF(dt);
       else if (this.mode === 'CP') this.updateCP(dt);
+      else if (this.mode === 'RGB') this.updateRugby(dt);
+      else if (this.mode === 'SGE') this.updateSiege(dt);
       if (this.timeLimitSec > 0 && t >= this.timeLimitSec) this.checkEnd();
     }
 
@@ -822,6 +1046,12 @@ export class Room {
   updateEffects(dt) {
     const t = this.time;
     for (const p of this.alivePlayers()) {
+      if (p.drone && p.drone.heal && p.hp < p.maxHp * p.drone.threshold && (p.droneCd || 0) <= t) {
+        p.droneCd = t + p.drone.cooldown;
+        p.fx.repairUntil = t + 3;
+        p.fx.repairRate = (p.maxHp * p.drone.heal) / 3;
+        this.events.push({ e: 'drone', p: p.id, id: p.drone.id });
+      }
       if (p.fx.burnUntil > t) {
         const from = p.fx.burnFrom != null ? this.players.get(p.fx.burnFrom) : null;
         this.damage(p, p.fx.burnDps * dt, from || null, 'firebird', { silent: true });
@@ -878,11 +1108,13 @@ export class Room {
       r: [this.flags.red.state, +this.flags.red.pos[0].toFixed(2), +this.flags.red.pos[1].toFixed(2), +this.flags.red.pos[2].toFixed(2), this.flags.red.carrier ?? -1],
       b: [this.flags.blue.state, +this.flags.blue.pos[0].toFixed(2), +this.flags.blue.pos[1].toFixed(2), +this.flags.blue.pos[2].toFixed(2), this.flags.blue.carrier ?? -1],
     } : undefined;
-    const cp = this.mode === 'CP' ? this.points.map((p) => [p.owner, p.capTeam, Math.round(p.cap * 100)]) : undefined;
+    const cp = this.mode === 'CP' || this.mode === 'SGE' ? this.points.map((p) => [p.owner, p.capTeam, Math.round(p.cap * 100)]) : undefined;
+    const bl = this.ball ? [+this.ball.pos[0].toFixed(2), +this.ball.pos[1].toFixed(2), +this.ball.pos[2].toFixed(2), this.ball.carrier ?? -1] : undefined;
+    const sg = this.siege ? [this.siege.attacker, this.siege.round, Math.max(0, Math.round(this.siege.roundEnd - this.time)), +this.points[0].pos[0].toFixed(2), +this.points[0].pos[1].toFixed(2), +this.points[0].pos[2].toFixed(2)] : undefined;
     return {
       t: S2C.SNAP, time: +this.time.toFixed(3), left: Math.round(this.timeLeft), st: this.state === 'running' ? 1 : 0,
       tanks, pr: this.projectiles.map(packProjectile), dr: this.drops.map(packDrop), mn: this.mines.map(packMine),
-      fl, cp, ts: [this.teamScore[1], this.teamScore[2]],
+      fl, cp, bl, sg, ts: [this.teamScore[1], this.teamScore[2]],
       sc: [...this.players.values()].map((p) => [p.id, p.score, p.kills, p.deaths]),
     };
   }

@@ -1,0 +1,400 @@
+{
+ "Barrel_01": {
+  "dims": [
+   0.563,
+   0.563,
+   0.88
+  ],
+  "polycount": 2682,
+  "ratio": 1,
+  "authors": [
+   "Jorge Camacho"
+  ],
+  "source": "https://polyhaven.com/a/Barrel_01",
+  "license": "CC0 1.0"
+ },
+ "barrel_03": {
+  "dims": [
+   0.634,
+   0.639,
+   0.93
+  ],
+  "polycount": 1473,
+  "ratio": 1,
+  "authors": [
+   "Serhii Khromov"
+  ],
+  "source": "https://polyhaven.com/a/barrel_03",
+  "license": "CC0 1.0"
+ },
+ "wooden_crate_02": {
+  "dims": [
+   1.166,
+   0.529,
+   0.464
+  ],
+  "polycount": 5176,
+  "ratio": 1,
+  "authors": [
+   "James Ray Cock",
+   "Jurita Burger"
+  ],
+  "source": "https://polyhaven.com/a/wooden_crate_02",
+  "license": "CC0 1.0"
+ },
+ "old_military_crate": {
+  "dims": [
+   1.815,
+   0.979,
+   0.301
+  ],
+  "polycount": 10476,
+  "ratio": 0.7636502481863306,
+  "authors": [
+   "Jack Mava"
+  ],
+  "source": "https://polyhaven.com/a/old_military_crate",
+  "license": "CC0 1.0"
+ },
+ "ammo_box": {
+  "dims": [
+   0.087,
+   0.258,
+   0.177
+  ],
+  "polycount": 4382,
+  "ratio": 1,
+  "authors": [
+   "DanKit"
+  ],
+  "source": "https://polyhaven.com/a/ammo_box",
+  "license": "CC0 1.0"
+ },
+ "metal_jerrycan_green": {
+  "dims": [
+   0.374,
+   0.171,
+   0.501
+  ],
+  "polycount": 9636,
+  "ratio": 0.6226650062266501,
+  "authors": [
+   "Ulan Cabanilla"
+  ],
+  "source": "https://polyhaven.com/a/metal_jerrycan_green",
+  "license": "CC0 1.0"
+ },
+ "medical_box": {
+  "dims": [
+   0.525,
+   0.35,
+   0.098
+  ],
+  "polycount": 3718,
+  "ratio": 1,
+  "authors": [
+   "Ulan Cabanilla"
+  ],
+  "source": "https://polyhaven.com/a/medical_box",
+  "license": "CC0 1.0"
+ },
+ "plastic_crate_02": {
+  "dims": [
+   0.506,
+   0.406,
+   0.254
+  ],
+  "polycount": 5840,
+  "ratio": 1,
+  "authors": [
+   "Fabi_G"
+  ],
+  "source": "https://polyhaven.com/a/plastic_crate_02",
+  "license": "CC0 1.0"
+ },
+ "propane_tank": {
+  "dims": [
+   0.337,
+   0.337,
+   0.554
+  ],
+  "polycount": 5238,
+  "ratio": 0.9545628102329133,
+  "authors": [
+   "Slinc"
+  ],
+  "source": "https://polyhaven.com/a/propane_tank",
+  "license": "CC0 1.0"
+ },
+ "old_tyre": {
+  "dims": [
+   0.6,
+   0.165,
+   0.6
+  ],
+  "polycount": 2880,
+  "ratio": 1,
+  "authors": [
+   "MP"
+  ],
+  "source": "https://polyhaven.com/a/old_tyre",
+  "license": "CC0 1.0"
+ },
+ "oil_tin": {
+  "dims": [
+   0.115,
+   0.154,
+   0.205
+  ],
+  "polycount": 2834,
+  "ratio": 1,
+  "authors": [
+   "Niklas"
+  ],
+  "source": "https://polyhaven.com/a/oil_tin",
+  "license": "CC0 1.0"
+ },
+ "cardboard_box_01": {
+  "dims": [
+   0.387,
+   0.516,
+   0.342
+  ],
+  "polycount": 16952,
+  "ratio": 0.2949504483246815,
+  "authors": [
+   "Rahul Chaudhary"
+  ],
+  "source": "https://polyhaven.com/a/cardboard_box_01",
+  "license": "CC0 1.0"
+ },
+ "concrete_road_barrier": {
+  "dims": [
+   1.545,
+   0.641,
+   0.835
+  ],
+  "polycount": 80776,
+  "ratio": 0.07427948895711597,
+  "authors": [
+   "Amal Kumar"
+  ],
+  "source": "https://polyhaven.com/a/concrete_road_barrier",
+  "license": "CC0 1.0"
+ },
+ "concrete_road_barrier_02": {
+  "dims": [
+   1.567,
+   0.442,
+   1.112
+  ],
+  "polycount": 42578,
+  "ratio": 0.1409178448964254,
+  "authors": [
+   "Amal Kumar"
+  ],
+  "source": "https://polyhaven.com/a/concrete_road_barrier_02",
+  "license": "CC0 1.0"
+ },
+ "boulder_01": {
+  "dims": [
+   1.273,
+   1.831,
+   1.004
+  ],
+  "polycount": 123976,
+  "ratio": 0.04839646383170936,
+  "authors": [
+   "Rico Cilliers"
+  ],
+  "source": "https://polyhaven.com/a/boulder_01",
+  "license": "CC0 1.0"
+ },
+ "namaqualand_boulder_04": {
+  "dims": [
+   2.523,
+   2.501,
+   1.904
+  ],
+  "polycount": 110746,
+  "ratio": 0.05417802900330486,
+  "authors": [
+   "Jenelle van Heerden"
+  ],
+  "source": "https://polyhaven.com/a/namaqualand_boulder_04",
+  "license": "CC0 1.0"
+ },
+ "rock_moss_set_01": {
+  "dims": [
+   8.005,
+   6.949,
+   1.768
+  ],
+  "polycount": 63127,
+  "ratio": 0.19009298715288228,
+  "authors": [
+   "Kless Gyzen"
+  ],
+  "source": "https://polyhaven.com/a/rock_moss_set_01",
+  "license": "CC0 1.0"
+ },
+ "dead_tree_trunk": {
+  "dims": [
+   3.051,
+   0.278,
+   0.29
+  ],
+  "polycount": 101802,
+  "ratio": 0.07858391780122198,
+  "authors": [
+   "Rob Tuytel"
+  ],
+  "source": "https://polyhaven.com/a/dead_tree_trunk",
+  "license": "CC0 1.0"
+ },
+ "dry_branches_medium_01": {
+  "dims": [
+   1.059,
+   1.299,
+   0.341
+  ],
+  "polycount": 16803,
+  "ratio": 0.476105457358805,
+  "authors": [
+   "Rico Cilliers"
+  ],
+  "source": "https://polyhaven.com/a/dry_branches_medium_01",
+  "license": "CC0 1.0"
+ },
+ "modular_chainlink_fence": {
+  "dims": [
+   8.115,
+   2.149,
+   2.523
+  ],
+  "polycount": 89232,
+  "ratio": 0.13448090371167296,
+  "authors": [
+   "James Ray Cock",
+   "Amal Kumar"
+  ],
+  "source": "https://polyhaven.com/a/modular_chainlink_fence",
+  "license": "CC0 1.0"
+ },
+ "modular_industrial_pipes_01": {
+  "dims": [
+   1.403,
+   0.308,
+   1.955
+  ],
+  "polycount": 12340,
+  "ratio": 0.6482982171799028,
+  "authors": [
+   "Jorge Camacho"
+  ],
+  "source": "https://polyhaven.com/a/modular_industrial_pipes_01",
+  "license": "CC0 1.0"
+ },
+ "metal_trash_can": {
+  "dims": [
+   1.847,
+   0.556,
+   0.906
+  ],
+  "polycount": 13960,
+  "ratio": 0.4297994269340974,
+  "authors": [
+   "GurJas Studios"
+  ],
+  "source": "https://polyhaven.com/a/metal_trash_can",
+  "license": "CC0 1.0"
+ },
+ "power_box_01": {
+  "dims": [
+   0.377,
+   0.418,
+   0.503
+  ],
+  "polycount": 21272,
+  "ratio": 0.23505077096652877,
+  "authors": [
+   "Rico Cilliers",
+   "Yann Kervran"
+  ],
+  "source": "https://polyhaven.com/a/power_box_01",
+  "license": "CC0 1.0"
+ },
+ "ladder_sectioned_01": {
+  "dims": [
+   0.662,
+   0.178,
+   2.135
+  ],
+  "polycount": 29140,
+  "ratio": 0.17158544955387783,
+  "authors": [
+   "MP"
+  ],
+  "source": "https://polyhaven.com/a/ladder_sectioned_01",
+  "license": "CC0 1.0"
+ },
+ "old_military_compressor": {
+  "dims": [
+   0.598,
+   1.676,
+   1.179
+  ],
+  "polycount": 79042,
+  "ratio": 0.12651501733255738,
+  "authors": [
+   "Brian Speight"
+  ],
+  "source": "https://polyhaven.com/a/old_military_compressor",
+  "license": "CC0 1.0"
+ },
+ "industrial_pastic_container": {
+  "dims": [
+   0.476,
+   0.631,
+   0.423
+  ],
+  "polycount": 7118,
+  "ratio": 0.7024445068839562,
+  "authors": [
+   "Galo Benivegna"
+  ],
+  "source": "https://polyhaven.com/a/industrial_pastic_container",
+  "license": "CC0 1.0"
+ },
+ "quiver_tree_01": {
+  "dims": [
+   1.181,
+   0.969,
+   2.716
+  ],
+  "polycount": 269522,
+  "ratio": 0.09275680649446057,
+  "authors": [
+   "James Ray Cock",
+   "Dario Barresi",
+   "Rico Cilliers"
+  ],
+  "source": "https://polyhaven.com/a/quiver_tree_01",
+  "license": "CC0 1.0"
+ },
+ "island_tree_02": {
+  "dims": [
+   8.486,
+   4.079,
+   3.409
+  ],
+  "polycount": 1762064,
+  "ratio": 0.03405097658200837,
+  "authors": [
+   "Rob Tuytel",
+   "Rico Cilliers"
+  ],
+  "source": "https://polyhaven.com/a/island_tree_02",
+  "license": "CC0 1.0"
+ }
+}

@@ -16,6 +16,8 @@ export const C2S = {
   SETTINGS: 'settings',  // { settings } persisted on profile
   PING: 'ping',          // { t }
   LEADERBOARD: 'leaderboard',
+  QUEUE: 'queue',        // { mode: 'any'|modeId } matchmaking
+  CLAN: 'clan',          // { op: 'create'|'join'|'leave'|'kick'|'list'|'info', tag, name, member }
 };
 
 // Server -> client message types
@@ -34,7 +36,12 @@ export const S2C = {
   PONG: 'pong',          // { t, st }
   GARAGE_OK: 'garage_ok',
   LEADERBOARD: 'leaderboard', // { top: [...] }
+  CLAN: 'clan',          // { ok, msg, clan, list }
+  CONTAINER: 'container', // { reward }
 };
+
+// Rugby ball snapshot layout
+export const BS = { X: 0, Y: 1, Z: 2, CARRIER: 3, LENGTH: 4 };
 
 // Tank snapshot array layout
 export const TS = {

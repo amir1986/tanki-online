@@ -147,8 +147,8 @@ defineMap({
     crate(6, 6, 2), crate(-6, -6, 2), crate(6, -6, 1.6), crate(-6, 6, 1.6),
     // base structures
     platform(60, 0, 18, 0.35, 14, 'metal'), platform(-60, 0, 18, 0.35, 14, 'metal'),
-    bunker(60, 12, Math.PI / 2), bunker(60, -12, Math.PI / 2), bunker(-60, 12, Math.PI / 2), bunker(-60, -12, Math.PI / 2),
-    container(52, 16, 0.4, 1), container(-52, -16, 0.4, 2), container(52, -18, -0.5, 3), container(-52, 18, -0.5, 1),
+    bunker(54, 18, Math.PI / 2), bunker(54, -18, Math.PI / 2), bunker(-54, 18, Math.PI / 2), bunker(-54, -18, Math.PI / 2),
+    container(46, 24, 0.4, 1), container(-46, -24, 0.4, 2), container(46, -26, -0.5, 3), container(-46, 26, -0.5, 1),
     // scattered cover
     barrier(30, 20, 0.6), barrier(-30, -20, 0.6), barrier(30, -22, -0.6), barrier(-30, 22, -0.6),
     barrier(40, 40, 1.0), barrier(-40, -40, 1.0), barrier(40, -40, 2.0), barrier(-40, 40, 2.0),
@@ -446,6 +446,241 @@ defineMap({
   points: [{ id: 'A', x: 0, z: 0 }, { id: 'B', x: 30, z: 30 }, { id: 'C', x: -30, z: -30 }, { id: 'D', x: -40, z: 30 }, { id: 'E', x: 40, z: -30 }],
   drops: [[0, 20], [0, -20], [-30, 10], [30, -10], [-50, 50], [50, -50], [50, 50], [-50, -50], [0, 50], [0, -50]],
   gold: [[0, 0], [30, 30], [-30, -30], [0, 50], [0, -50]],
+});
+
+// ---- ARENA (compact stadium, Rugby favourite) -----------------------------
+defineMap({
+  id: 'arena',
+  name: 'Arena',
+  desc: 'A compact stadium with two raised wings. Fast, symmetrical and made for Rugby.',
+  size: [110, 110],
+  cell: 2,
+  theme: {
+    ground: 'asphalt',
+    sky: { top: 0x2f5fb8, horizon: 0xd6dde8, ground: 0x4a4c50 },
+    fog: { color: 0xcfd6e0, near: 90, far: 280 }, fogDensity: 0.0026,
+    sun: [30, 70, 60], sunColor: 0xfff2dc, sunIntensity: 3.0,
+    hemi: [0xb0c4e0, 0x444648], hemiIntensity: 0.8,
+    turbidity: 5, rayleigh: 1.8, mie: 0.005, envIntensity: 0.55,
+  },
+  height: (x, z) => 0.12 * fbm(x / 8, z / 8, 91),
+  props: [
+    ...walls(110, 110),
+    // wings
+    platform(-36, 0, 14, 2.4, 40, 'concrete'), platform(36, 0, 14, 2.4, 40, 'concrete'),
+    ramp(-36, 26, 8, 10, 2.4, Math.PI), ramp(-36, -26, 8, 10, 2.4, 0), ramp(36, 26, 8, 10, 2.4, Math.PI), ramp(36, -26, 8, 10, 2.4, 0),
+    ramp(-25, 0, 8, 9, 2.4, -Math.PI / 2), ramp(25, 0, 8, 9, 2.4, Math.PI / 2),
+    crate(-36, 12, 1.8), crate(-36, -12, 1.8), crate(36, 12, 1.8), crate(36, -12, 1.8),
+    // centre circle cover
+    barrier(-8, 10, 0.4), barrier(8, -10, 0.4), barrier(-8, -10, -0.4), barrier(8, 10, -0.4),
+    container(-18, 20, 0.2, 2), container(18, -20, 0.2, 3), container(18, 20, -0.2, 1), container(-18, -20, -0.2, 4),
+    crate(0, 22, 2), crate(0, -22, 2), crate(-14, 0, 1.6), crate(14, 0, 1.6),
+    // goal ends
+    bunker(-16, 48, 0), bunker(16, 48, 0), bunker(-16, -48, 0), bunker(16, -48, 0),
+    platform(0, 46, 14, 0.35, 10, 'metal'), platform(0, -46, 14, 0.35, 10, 'metal'),
+  ],
+  spawns: {
+    dm: [...ring(0, 0, 40, 10, true, 0.25), ...ring(0, 0, 16, 4, true, 0.8)],
+    red: line(-12, 51, 12, 51, 6, Math.PI),
+    blue: line(-12, -51, 12, -51, 6, 0),
+  },
+  flags: { red: [0, 46], blue: [0, -46] },
+  points: [{ id: 'A', x: 0, z: 0 }, { id: 'B', x: -36, z: 0 }, { id: 'C', x: 36, z: 0 }],
+  drops: [[-20, 0], [20, 0], [0, 32], [0, -32], [-44, 30], [44, -30], [44, 30], [-44, -30]],
+  gold: [[0, 0], [-36, 0], [36, 0], [0, 30], [0, -30]],
+});
+
+// ---- OASIS ------------------------------------------------------------------
+const oasisHeight = (x, z) => {
+  let h = 2.6 * fbm(x / 26 + 9, z / 26 + 4, 101, 4) + 0.8 * fbm(x / 7, z / 7, 102, 2) - 1.2;
+  const d = Math.hypot(x, z);
+  const plateau = smoothstep(24, 12, d);
+  h = h * (1 - plateau) + 4.5 * plateau;
+  const fr = smoothstep(20, 9, Math.hypot(x - 56, z - 56)), fb = smoothstep(20, 9, Math.hypot(x + 56, z + 56));
+  h = h * (1 - fr) + 0.6 * fr;
+  h = h * (1 - fb) + 0.6 * fb;
+  return h;
+};
+defineMap({
+  id: 'oasis',
+  name: 'Oasis',
+  desc: 'Rolling dunes around a central palm plateau. Bases sit in opposite corners.',
+  size: [140, 140],
+  cell: 2,
+  theme: {
+    ground: 'sand',
+    sky: { top: 0x3e82d2, horizon: 0xf4e4c8, ground: 0xb89560 },
+    fog: { color: 0xeadcc4, near: 100, far: 320 }, fogDensity: 0.0024,
+    sun: [-50, 55, -60], sunColor: 0xfff1d4, sunIntensity: 3.4,
+    hemi: [0xc0d8ff, 0xa08050], hemiIntensity: 0.9,
+    turbidity: 7, rayleigh: 1.5, mie: 0.008, envIntensity: 0.6,
+  },
+  height: oasisHeight,
+  props: [
+    ...walls(140, 140),
+    ...[[6, 6], [-6, -6], [6, -7], [-7, 6], [0, 10], [10, 0], [-10, 1], [1, -10]].map(([x, z], i) => tree(x, z, 1.1 + (i % 3) * 0.15)),
+    crate(0, 0, 2.2), crate(3, 2, 1.6),
+    platform(56, 56, 16, 0.35, 16, 'metal'), platform(-56, -56, 16, 0.35, 16, 'metal'),
+    bunker(46, 62, 0.4), bunker(62, 46, -0.9), bunker(-46, -62, 0.4), bunker(-62, -46, -0.9),
+    container(30, 40, 0.6, 3), container(-30, -40, 0.6, 1), container(40, 30, -0.9, 2), container(-40, -30, -0.9, 4),
+    container(-40, 40, 0.8, 1), container(40, -40, 0.8, 3),
+    crate(-20, 30), crate(-18, 30), crate(-19, 30, 2, { dy: 2 }), crate(20, -30), crate(18, -30), crate(19, -30, 2, { dy: 2 }),
+    barrier(-30, 10, 0.5), barrier(30, -10, 0.5), barrier(10, -30, -0.5), barrier(-10, 30, -0.5),
+    rock(-50, 20, 3, 0.3), rock(50, -20, 3, 0.9), rock(20, 54, 2.4, 1.2), rock(-20, -54, 2.4, 0.4), rock(60, -58, 2.6), rock(-60, 58, 2.6),
+    rock(-36, -4, 1.8, 0.2), rock(36, 4, 1.8, 0.7),
+  ],
+  spawns: {
+    dm: [...ring(0, 0, 46, 10, true, 0.3), ...ring(0, 0, 30, 6, true, 0.1)],
+    red: ring(60, 60, 8, 6, false, 0).map((s) => ({ ...s, yaw: Math.atan2(-s.x, -s.z) })),
+    blue: ring(-60, -60, 8, 6, false, 0).map((s) => ({ ...s, yaw: Math.atan2(-s.x, -s.z) })),
+  },
+  flags: { red: [56, 56], blue: [-56, -56] },
+  points: [{ id: 'A', x: 0, z: 0 }, { id: 'B', x: -40, z: 40 }, { id: 'C', x: 40, z: -40 }, { id: 'D', x: 36, z: 36 }, { id: 'E', x: -36, z: -36 }],
+  drops: [[-20, 0], [20, 0], [0, 24], [0, -24], [-40, 40], [40, -40], [48, 24], [-48, -24]],
+  gold: [[0, 0], [-40, 40], [40, -40], [0, 30], [0, -30]],
+});
+
+// ---- HIGHLAND ---------------------------------------------------------------
+const highlandHeight = (x, z) => {
+  let h = 6 * fbm(x / 40 + 30, z / 40 + 10, 111, 5) + 2 * fbm(x / 13, z / 13, 112, 3) - 3;
+  // high fortress plateau in the north half, lowland in the south
+  const north = smoothstep(-10, 30, z);
+  h += north * 7;
+  // central causeway
+  h -= 4 * north * gauss(x, 6) * smoothstep(40, 10, Math.abs(z));
+  const fr = smoothstep(22, 10, Math.hypot(x, z - 62)), fb = smoothstep(22, 10, Math.hypot(x, z + 62));
+  h = h * (1 - fr) + 8.5 * fr;
+  h = h * (1 - fb) + 0.8 * fb;
+  return h;
+};
+defineMap({
+  id: 'highland',
+  name: 'Highland',
+  desc: 'A snowbound fortress on the high ground against attackers from the valley. Built for Siege.',
+  size: [150, 150],
+  cell: 2,
+  theme: {
+    ground: 'snow',
+    sky: { top: 0x4f78b0, horizon: 0xe0e8f2, ground: 0xd0d8e0 },
+    fog: { color: 0xdfe7f0, near: 100, far: 340 }, fogDensity: 0.0026,
+    sun: [60, 40, -70], sunColor: 0xfff6ea, sunIntensity: 2.7,
+    hemi: [0xc8dcff, 0x9aa4b0], hemiIntensity: 1.0,
+    turbidity: 3.5, rayleigh: 2.4, mie: 0.004, envIntensity: 0.65,
+  },
+  height: highlandHeight,
+  props: [
+    ...walls(150, 150),
+    // fortress walls with gaps
+    bunker(-28, 34, 0, 16, 3.4, 5), bunker(28, 34, 0, 16, 3.4, 5), bunker(-50, 34, 0, 14, 3.4, 5), bunker(50, 34, 0, 14, 3.4, 5),
+    bunker(-14, 60, Math.PI / 2), bunker(14, 60, Math.PI / 2), container(-24, 56, 0, 1), container(24, 56, 0, 2),
+    platform(0, 62, 20, 0.35, 14, 'metal'), platform(0, -62, 20, 0.35, 14, 'metal'),
+    bunker(-14, -62, 0), bunker(14, -62, 0), container(26, -54, 0.5, 3), container(-26, -54, 0.5, 4),
+    // valley cover
+    rock(-30, -20, 3, 0.2), rock(30, -20, 3, 0.8), rock(-12, -40, 2.4, 0.4), rock(12, -40, 2.4, 1.0), rock(-48, -44, 2.8), rock(48, -44, 2.8),
+    crate(-6, -16), crate(-4, -16), crate(-5, -16, 2, { dy: 2 }), crate(6, -28), crate(4, -28), crate(5, -28, 2, { dy: 2 }),
+    barrier(-20, -6, 0.3), barrier(20, -6, -0.3), barrier(0, -48, Math.PI / 2),
+    container(-40, -8, 0.4, 2), container(40, -8, -0.4, 1),
+    // plateau cover
+    crate(-10, 46, 1.8), crate(10, 46, 1.8), rock(-40, 50, 2.2), rock(40, 50, 2.2), barrier(0, 50, 0),
+    ...[[-66, 20], [-66, 40], [-66, 60], [66, 20], [66, 40], [66, 60], [-60, -60], [60, -60], [-66, -30], [66, -30]].map(([x, z], i) => tree(x, z, 0.9 + (i % 3) * 0.2)),
+  ],
+  spawns: {
+    dm: [...ring(0, 0, 48, 10, true, 0.2), ...ring(0, 0, 26, 6, true, 0.6)],
+    red: line(-16, 68, 16, 68, 6, Math.PI),
+    blue: line(-16, -68, 16, -68, 6, 0),
+  },
+  flags: { red: [0, 62], blue: [0, -62] },
+  points: [{ id: 'A', x: 0, z: 10 }, { id: 'B', x: -40, z: 48 }, { id: 'C', x: 40, z: 48 }, { id: 'D', x: 0, z: -34 }],
+  drops: [[0, -10], [-24, 20], [24, 20], [-30, -36], [30, -36], [0, 44], [-50, 0], [50, 0]],
+  gold: [[0, 10], [-40, 48], [40, 48], [0, -34], [0, 44]],
+});
+
+// ---- FOREST -----------------------------------------------------------------
+defineMap({
+  id: 'forest',
+  name: 'Forest',
+  desc: 'Dense woodland with clearings and a logging camp. Short sight lines, lots of ambushes.',
+  size: [150, 150],
+  cell: 2,
+  theme: {
+    ground: 'grass',
+    sky: { top: 0x3570c4, horizon: 0xdde8f0, ground: 0x4f6a3a },
+    fog: { color: 0xd4e0e6, near: 70, far: 240 }, fogDensity: 0.0036,
+    sun: [-40, 60, 70], sunColor: 0xfff2dc, sunIntensity: 2.9,
+    hemi: [0xa9c8f0, 0x3f5a30], hemiIntensity: 0.8,
+    turbidity: 5, rayleigh: 2.4, mie: 0.005, envIntensity: 0.5,
+  },
+  height: (x, z) => 3 * fbm(x / 30 + 1, z / 30 + 2, 121, 4) + 1.2 * fbm(x / 10, z / 10, 122, 2) - 1.5,
+  props: [
+    ...walls(150, 150),
+    // woods: rings of trees around clearings
+    ...Array.from({ length: 48 }, (_, i) => { const a = i * 2.399; const r = 22 + (i % 5) * 9; return tree(Math.cos(a) * r, Math.sin(a) * r, 0.9 + (i % 4) * 0.15); }),
+    ...Array.from({ length: 20 }, (_, i) => { const a = i * 1.1 + 0.3; const r = 58 + (i % 3) * 5; return tree(Math.cos(a) * r, Math.sin(a) * r, 1.0 + (i % 3) * 0.2); }),
+    // logging camp in the centre
+    platform(0, 0, 14, 0.35, 14, 'metal'), container(-9, 4, 0.3, 2), container(9, -4, 0.3, 3), crate(-2, 7, 1.8), crate(3, -7, 1.8), crate(0, 0, 2),
+    bunker(-18, 0, Math.PI / 2), bunker(18, 0, Math.PI / 2),
+    // base camps
+    platform(-56, -56, 16, 0.35, 16, 'metal'), platform(56, 56, 16, 0.35, 16, 'metal'),
+    bunker(-62, -44, 0), bunker(-44, -62, Math.PI / 2), bunker(62, 44, 0), bunker(44, 62, Math.PI / 2),
+    crate(-46, -46, 2), crate(46, 46, 2),
+    rock(-30, 30, 2.6, 0.3), rock(30, -30, 2.6, 0.9), rock(40, 10, 2, 0.5), rock(-40, -10, 2, 1.1), rock(10, -44, 2.2), rock(-10, 44, 2.2),
+    barrier(-24, 12, 0.6), barrier(24, -12, 0.6), barrier(-12, -24, -0.6), barrier(12, 24, -0.6),
+    container(-40, 40, 0.8, 4), container(40, -40, 0.8, 1),
+  ],
+  spawns: {
+    dm: [...ring(0, 0, 44, 10, true, 0.35), ...ring(0, 0, 28, 6, true, 0.9)],
+    red: ring(60, 60, 8, 6, false, 0).map((s) => ({ ...s, yaw: Math.atan2(-s.x, -s.z) })),
+    blue: ring(-60, -60, 8, 6, false, 0).map((s) => ({ ...s, yaw: Math.atan2(-s.x, -s.z) })),
+  },
+  flags: { red: [56, 56], blue: [-56, -56] },
+  points: [{ id: 'A', x: 0, z: 0 }, { id: 'B', x: -40, z: 40 }, { id: 'C', x: 40, z: -40 }, { id: 'D', x: 30, z: 30 }, { id: 'E', x: -30, z: -30 }],
+  drops: [[-20, 0], [20, 0], [0, 20], [0, -20], [-40, 40], [40, -40], [44, 20], [-44, -20]],
+  gold: [[0, 0], [-40, 40], [40, -40], [30, 30], [-30, -30]],
+});
+
+// ---- FACTORY ----------------------------------------------------------------
+defineMap({
+  id: 'factory',
+  name: 'Factory',
+  desc: 'An industrial yard of warehouses, container stacks and loading ramps.',
+  size: [140, 140],
+  cell: 2,
+  theme: {
+    ground: 'asphalt',
+    sky: { top: 0x44556e, horizon: 0xc4c8cf, ground: 0x45484c },
+    fog: { color: 0xbcc2ca, near: 80, far: 260 }, fogDensity: 0.004,
+    sun: [60, 45, 40], sunColor: 0xffe8d0, sunIntensity: 2.2,
+    hemi: [0xa8b4c4, 0x3a3c40], hemiIntensity: 0.75,
+    turbidity: 10, rayleigh: 1.3, mie: 0.011, envIntensity: 0.5,
+  },
+  height: (x, z) => 0.1 * fbm(x / 9, z / 9, 131),
+  props: [
+    ...walls(140, 140, 'brick'),
+    // warehouses
+    building(-40, -40, 26, 9, 18, 0, 1), building(40, 40, 26, 9, 18, 0, 2), building(-40, 36, 18, 7, 22, 0, 3), building(40, -36, 18, 7, 22, 0, 0),
+    building(0, -56, 30, 6, 10, 0, 1), building(0, 56, 30, 6, 10, 0, 2),
+    // loading dock platform with ramps
+    platform(0, 0, 30, 1.6, 16, 'concrete'),
+    ramp(0, 13, 10, 8, 1.6, Math.PI), ramp(0, -13, 10, 8, 1.6, 0), ramp(20, 0, 8, 10, 1.6, -Math.PI / 2), ramp(-20, 0, 8, 10, 1.6, Math.PI / 2),
+    container(-8, 2, Math.PI / 2, 1, { dy: 1.6 }), container(8, -2, Math.PI / 2, 3, { dy: 1.6 }),
+    // container stacks
+    container(-22, -18, 0, 2), container(-22, -14.5, 0, 4), container(-22, -16.2, 0, 1, { dy: 2.7 }),
+    container(22, 18, 0, 3), container(22, 14.5, 0, 2), container(22, 16.2, 0, 4, { dy: 2.7 }),
+    container(-50, 0, Math.PI / 2, 1), container(50, 0, Math.PI / 2, 3), container(0, 32, 0, 2), container(0, -32, 0, 4),
+    crate(-30, 14), crate(-28, 14), crate(-29, 14, 2, { dy: 2 }), crate(30, -14), crate(28, -14), crate(29, -14, 2, { dy: 2 }),
+    crate(-58, 24, 2.2), crate(58, -24, 2.2), crate(24, 58, 2), crate(-24, -58, 2),
+    barrier(-12, -24, Math.PI / 2), barrier(12, 24, Math.PI / 2), barrier(-36, 6, 0), barrier(36, -6, 0),
+    barrier(-60, -20, 0.2), barrier(60, 20, 0.2), bunker(-58, 58, Math.PI / 4), bunker(58, -58, Math.PI / 4),
+  ],
+  spawns: {
+    dm: [...ring(0, 0, 34, 8, true, 0.3), ...ring(0, 0, 60, 8, true, 0.0)],
+    red: [...line(44, 64, 62, 64, 4, Math.PI), ...line(64, 48, 64, 60, 3, -Math.PI / 2)],
+    blue: [...line(-44, -64, -62, -64, 4, 0), ...line(-64, -48, -64, -60, 3, Math.PI / 2)],
+  },
+  flags: { red: [60, 60], blue: [-60, -60] },
+  points: [{ id: 'A', x: 0, z: 0 }, { id: 'B', x: -40, z: 0 }, { id: 'C', x: 40, z: 0 }, { id: 'D', x: 0, z: 40 }, { id: 'E', x: 0, z: -40 }],
+  drops: [[-30, 0], [30, 0], [0, 22], [0, -22], [-40, 20], [40, -20], [36, 24], [-36, -24]],
+  gold: [[0, 0], [-40, 0], [40, 0], [0, 40], [0, -40]],
 });
 
 // ---- builder --------------------------------------------------------------

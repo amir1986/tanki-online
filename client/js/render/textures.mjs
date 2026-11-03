@@ -1,6 +1,12 @@
 // Procedural PBR textures (albedo + normal maps), all generated at runtime, all tileable.
 import * as THREE from 'three';
 import { hash2 } from '/shared/noise.mjs';
+import { Assets } from './assets.mjs';
+
+// File based CC0 PBR sets (ambientCG) by role; the procedural builders below remain as fallbacks.
+export const GROUND_SETS = { grass: 'grass', dirt: 'dirt', dirtDry: 'dirtDry', rock: 'rock', rockMoss: 'rockMoss', sand: 'sand', snow: 'snow', snowDirty: 'snowDirty', asphalt: 'asphalt', gravel: 'gravel' };
+export const PROP_SETS = { concrete: 'concrete', metal: 'metalPlates', metalSmooth: 'metal', crate: 'planks', container: 'corrugated', brick: 'bricks', building: 'concretePlain', barrier: 'concreteDamaged', bunker: 'concreteBunker', rock: 'rock', bark: 'bark', leaves: 'moss', pine: 'moss', treads: 'rubber', steel: 'metalDirty', sandbag: 'fabric', rubber: 'rubber', tiles: 'tiles', road: 'asphaltDark', painted: 'metalPainted', plates: 'metalPlates', rust: 'metalRust', metalAged: 'metalAged', corrugatedBlue: 'corrugatedBlue', paintedWood: 'paintedWood' };
+export const TEXTURE_SETS = [...new Set([...Object.values(GROUND_SETS), ...Object.values(PROP_SETS)])];
 
 const cache = new Map();
 const canvas = (size) => { const c = document.createElement('canvas'); c.width = size; c.height = size; return c; };
@@ -254,7 +260,12 @@ const groundBuilders = {
     speckle(ctx, R, 1200, '#44464a', 0.3, 1, 3, 75);
     const hc = heightToCanvas(H, R), hctx = hc.getContext('2d');
     scribble(hctx, R, 26, '#000000', 0.9, 120, 420, 2, 73);
-    return SET(makeTex(c), makeTex(normalFromHeight(heightFromCanvas(hc), R, 2.2), { srgb: false }));
+    // puddles: low roughness blobs so the asphalt reflects the sky after rain
+    const puddle = field(F, 5, 3, 76);
+    const rc = paintCanvas(R, (u, v) => { const k = sampleF(puddle, F, u, v); const r = 235 - 200 * sstep(0.62, 0.7, k); return [r, r, r]; });
+    const set = SET(makeTex(c), makeTex(normalFromHeight(heightFromCanvas(hc), R, 2.2), { srgb: false }));
+    set.rough = makeTex(rc, { srgb: false });
+    return set;
   },
 };
 
@@ -273,11 +284,25 @@ const propBuilders = {
       return mul(mix(a, b, k * 0.6 + f * 0.4), (0.92 + hash2(x, y, 4) * 0.12) * (1 - streak * 0.25));
     });
     const ctx = c.getContext('2d');
-    speckle(ctx, R, 1200, '#5f6164', 0.35, 0.8, 2.5, 83);
-    scribble(ctx, R, 18, '#56585b', 0.4, 40, 160, 1, 84);
+    speckle(ctx, R, 500, '#5f6164', 0.25, 0.8, 2.2, 83);
+    scribble(ctx, R, 10, '#56585b', 0.3, 40, 160, 1, 84);
+    // panel seams and form-tie holes
+    ctx.fillStyle = 'rgba(40,42,45,0.55)';
+    ctx.fillRect(0, R / 2 - 2, R, 4); ctx.fillRect(R / 2 - 2, 0, 4, R);
+    ctx.fillStyle = 'rgba(30,32,35,0.7)';
+    for (const [x, y] of [[R * 0.25, R * 0.25], [R * 0.75, R * 0.25], [R * 0.25, R * 0.75], [R * 0.75, R * 0.75]]) { ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill(); }
+    // water stains running down from the seam
+    for (let i = 0; i < 8; i++) {
+      const x = hash2(i, 5, 85) * R, w = 10 + hash2(i, 6, 85) * 30, len = 60 + hash2(i, 7, 85) * 120;
+      const g = ctx.createLinearGradient(0, R / 2, 0, R / 2 + len);
+      g.addColorStop(0, 'rgba(50,52,55,0.35)'); g.addColorStop(1, 'rgba(50,52,55,0)');
+      ctx.fillStyle = g; ctx.fillRect(x, R / 2, w, len);
+    }
     const hc = heightToCanvas(H, R), hctx = hc.getContext('2d');
-    speckle(hctx, R, 1200, '#000000', 0.6, 0.8, 2.5, 83);
-    return SET(makeTex(c), makeTex(normalFromHeight(heightFromCanvas(hc), R, 1.6), { srgb: false }));
+    speckle(hctx, R, 500, '#000000', 0.5, 0.8, 2.2, 83);
+    hctx.fillStyle = '#000000'; hctx.fillRect(0, R / 2 - 2, R, 4); hctx.fillRect(R / 2 - 2, 0, 4, R);
+    for (const [x, y] of [[R * 0.25, R * 0.25], [R * 0.75, R * 0.25], [R * 0.25, R * 0.75], [R * 0.75, R * 0.75]]) { hctx.beginPath(); hctx.arc(x, y, 4, 0, Math.PI * 2); hctx.fill(); }
+    return SET(makeTex(c), makeTex(normalFromHeight(heightFromCanvas(hc), R, 2.0), { srgb: false }));
   },
   bunker() {
     const R = 512, F = 256;
@@ -498,6 +523,19 @@ const propBuilders = {
     const H = heightCanvas(R, (u, v, x, y) => hash2(x >> 2, y, 7) * 0.5 + hash2(x, y, 9) * 0.1);
     return SET(makeTex(c), makeTex(normalFromHeight(H, R, 0.6), { srgb: false }));
   },
+  sandbag() {
+    const R = 256, F = 128;
+    const f = field(F, 8, 3, 331), f2 = field(F, 40, 2, 332);
+    const a = rgb(0x8a7a52), b = rgb(0xb3a376);
+    const H = new Float32Array(R * R);
+    const c = paintCanvas(R, (u, v, x, y) => {
+      const k = sampleF(f, F, u, v), k2 = sampleF(f2, F, u, v);
+      const seam = 0.5 + 0.5 * Math.sin(Math.PI * 2 * v * 3);
+      H[y * R + x] = k2 * 0.4 + seam * 0.6;
+      return mul(mix(a, b, k), (0.85 + k2 * 0.25) * (0.8 + 0.2 * seam));
+    });
+    return SET(makeTex(c), makeTex(normalFromHeight(H, R, 2.2), { srgb: false }));
+  },
   rubber() {
     const R = 128;
     const c = paintCanvas(R, (u, v, x, y) => mul(rgb(0x1e1f21), 0.9 + hash2(x, y, 3) * 0.2));
@@ -547,18 +585,41 @@ const miscBuilders = {
     ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   },
+  grassBlade(size = 256) { return bladeTex(size, ['#3f6a22', '#5d8f32', '#7aa63e'], '#2a4a16'); },
+  dryBlade(size = 256) { return bladeTex(size, ['#a6965a', '#c2b074', '#8f834c'], '#6e6338'); },
+  leafCard(size = 256) {
+    const c = canvas(size), ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, size, size);
+    for (let i = 0; i < 70; i++) {
+      const x = size * (0.15 + hash2(i, 1, 311) * 0.7), y = size * (0.15 + hash2(i, 2, 311) * 0.7);
+      const r = size * (0.05 + hash2(i, 3, 311) * 0.06);
+      const g = 60 + hash2(i, 4, 311) * 90, rr = 30 + hash2(i, 5, 311) * 40;
+      ctx.fillStyle = `rgb(${rr | 0},${g | 0},${(20 + hash2(i, 6, 311) * 30) | 0})`;
+      ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.6, hash2(i, 7, 311) * Math.PI, 0, Math.PI * 2); ctx.fill();
+    }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+  },
+  paintRough(size = 256) {
+    const F = 128;
+    const f = field(F, 6, 3, 321), f2 = field(F, 30, 2, 322);
+    const c = paintCanvas(size, (u, v, x, y) => { const k = sampleF(f, F, u, v) * 0.5 + sampleF(f2, F, u, v) * 0.3 + hash2(x, y, 4) * 0.2; const r = 110 + k * 120; return [r, r, r]; });
+    const ctx = c.getContext('2d');
+    scribble(ctx, size, 140, '#f0f0f0', 0.5, 6, 40, 1, 323);
+    return makeTex(c, { srgb: false });
+  },
   clouds(size = 1024) {
     const F = 256;
-    const f1 = field(F, 3, 5, 251, 0.55), f2 = field(F, 7, 3, 252);
+    const f1 = field(F, 3, 4, 251, 0.5), f2 = field(F, 9, 3, 252), cover = field(F, 2, 2, 253);
     const c = canvas(size), ctx = c.getContext('2d');
     const img = ctx.createImageData(size, size);
     for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
       const u = x / size, v = y / size;
-      const n = sampleF(f1, F, u, v) * 0.75 + sampleF(f2, F, u, v) * 0.25;
-      const a = sstep(0.52, 0.72, n);
-      const shade = 0.82 + 0.18 * sstep(0.6, 0.9, n);
+      const n = sampleF(f1, F, u, v) * 0.7 + sampleF(f2, F, u, v) * 0.3;
+      const cv = sstep(0.45, 0.65, sampleF(cover, F, u, v));           // large clear areas between cloud banks
+      const a = sstep(0.56, 0.74, n) * cv;
+      const shade = 0.9 + 0.1 * sstep(0.6, 0.9, n);
       const i = (y * size + x) * 4;
-      img.data[i] = 255 * shade; img.data[i + 1] = 255 * shade; img.data[i + 2] = 255 * Math.min(1, shade + 0.02); img.data[i + 3] = a * 255;
+      img.data[i] = 255 * shade; img.data[i + 1] = 255 * shade; img.data[i + 2] = 255; img.data[i + 3] = a * 255;
     }
     ctx.putImageData(img, 0, 0);
     const t = makeTex(c);
@@ -580,6 +641,28 @@ const miscBuilders = {
   },
 };
 
+/** Alpha-cutout grass blade cluster. */
+function bladeTex(size, colors, dark) {
+  const c = canvas(size), ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, size, size);
+  for (let i = 0; i < 44; i++) {
+    const x0 = size * (0.08 + hash2(i, 1, 301) * 0.84);
+    const h = size * (0.3 + hash2(i, 2, 301) * 0.55);
+    const lean = (hash2(i, 3, 301) - 0.5) * size * 0.5;
+    const w = size * (0.035 + hash2(i, 4, 301) * 0.045);
+    const col = colors[i % colors.length];
+    const g = ctx.createLinearGradient(0, size, 0, size - h);
+    g.addColorStop(0, dark); g.addColorStop(0.55, col); g.addColorStop(1, col);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(x0 - w, size);
+    ctx.bezierCurveTo(x0 - w * 0.9 + lean * 0.2, size - h * 0.5, x0 - w * 0.25 + lean * 0.8, size - h * 0.95, x0 + lean, size - h);
+    ctx.bezierCurveTo(x0 + w * 0.25 + lean * 0.8, size - h * 0.95, x0 + w * 0.9 + lean * 0.2, size - h * 0.5, x0 + w, size);
+    ctx.closePath(); ctx.fill();
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t;
+}
+
 function flagTex(size, color) {
   const c = canvas(size), ctx = c.getContext('2d');
   ctx.fillStyle = color; ctx.fillRect(0, 0, size, size);
@@ -594,15 +677,27 @@ function flagTex(size, color) {
 export const Textures = {
   /** Ground set { map, normal } for 'grass' | 'dirt' | 'rock' | 'sand' | 'snow' | 'asphalt'. */
   ground(name) {
+    const file = Assets.set(GROUND_SETS[name] || name);
+    if (file) return file;
     const key = 'g:' + name;
     if (!cache.has(key)) { const b = groundBuilders[name] || groundBuilders.grass; cache.set(key, b()); }
     return cache.get(key);
   },
   /** Prop set { map, normal }. */
   prop(name) {
+    const file = Assets.set(PROP_SETS[name] || name);
+    if (file) return file;
     const key = 'p:' + name;
     if (!cache.has(key)) { const b = propBuilders[name] || propBuilders.concrete; cache.set(key, b()); }
     return cache.get(key);
+  },
+  /** Full PBR material for a prop set (file based maps with every channel, procedural fallback). */
+  material(name, extra = {}) {
+    const file = PROP_SETS[name] || GROUND_SETS[name] || name;
+    if (Assets.has(file)) return Assets.material(file, extra);
+    const t = this.prop(name);
+    const { physical, normalScale, ...rest } = extra;
+    return new THREE.MeshStandardMaterial({ map: t.map, normalMap: t.normal, roughness: 0.85, metalness: 0.05, ...rest });
   },
   /** Misc single textures (particles, flags, blobs...). */
   get(name) {

@@ -1,0 +1,318 @@
+{
+ "grass": {
+  "id": "Grass004",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "grassDark": {
+  "id": "Grass001",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "dirt": {
+  "id": "Ground037",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "dirtDry": {
+  "id": "Ground109",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "sand": {
+  "id": "Ground054",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "sandLight": {
+  "id": "Ground093A",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "rock": {
+  "id": "Rock058",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "rockDark": {
+  "id": "Rock035",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "rockMoss": {
+  "id": "Rock064",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "gravel": {
+  "id": "Gravel023",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "snow": {
+  "id": "Snow010A",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "snowDirty": {
+  "id": "Snow011",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "asphalt": {
+  "id": "Asphalt031",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "asphaltDark": {
+  "id": "Asphalt033",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "concrete": {
+  "id": "Concrete034",
+  "maps": [
+   "color",
+   "normal",
+   "rough"
+  ]
+ },
+ "concreteBunker": {
+  "id": "Concrete031",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "concreteDamaged": {
+  "id": "Concrete044D",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao",
+   "metal"
+  ]
+ },
+ "concretePlain": {
+  "id": "Concrete046",
+  "maps": [
+   "color",
+   "normal",
+   "rough"
+  ]
+ },
+ "metal": {
+  "id": "Metal032",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "metal"
+  ]
+ },
+ "metalDirty": {
+  "id": "Metal046B",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "metal"
+  ]
+ },
+ "metalAged": {
+  "id": "Metal063",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "metal"
+  ]
+ },
+ "metalRust": {
+  "id": "Metal041B",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "metal"
+  ]
+ },
+ "metalPlates": {
+  "id": "MetalPlates013",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao",
+   "metal"
+  ]
+ },
+ "metalPainted": {
+  "id": "Metal027",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "metal"
+  ]
+ },
+ "corrugated": {
+  "id": "CorrugatedSteel009",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao",
+   "metal"
+  ]
+ },
+ "corrugatedBlue": {
+  "id": "CorrugatedSteel007A",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao",
+   "metal"
+  ]
+ },
+ "rubber": {
+  "id": "Rubber004",
+  "maps": [
+   "color",
+   "normal",
+   "rough"
+  ]
+ },
+ "planks": {
+  "id": "Planks037A",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao",
+   "metal"
+  ]
+ },
+ "bricks": {
+  "id": "Bricks105",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "moss": {
+  "id": "Moss002",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "bark": {
+  "id": "Bark012",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "leavesGround": {
+  "id": "Ground076",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "tiles": {
+  "id": "Tiles140",
+  "maps": [
+   "color",
+   "normal",
+   "rough"
+  ]
+ },
+ "fabric": {
+  "id": "Fabric061",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ },
+ "paintedWood": {
+  "id": "PaintedWood008C",
+  "maps": [
+   "color",
+   "normal",
+   "rough",
+   "ao"
+  ]
+ }
+}

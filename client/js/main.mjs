@@ -8,9 +8,17 @@ import { Screens } from './ui/screens.mjs';
 import { Garage, Showroom } from './ui/garage.mjs';
 import { BattleClient } from './battle.mjs';
 import { C2S } from '/shared/protocol.mjs';
+import { Assets } from './render/assets.mjs';
+
+export const QUALITY_PRESETS = {
+  low: { scale: 0.7, shadows: 1, bloom: false, ao: false },
+  medium: { scale: 0.85, shadows: 1, bloom: true, ao: false },
+  high: { scale: 1, shadows: 2, bloom: true, ao: true },
+  ultra: { scale: 1, shadows: 3, bloom: true, ao: true },
+};
 
 const DEFAULT_SETTINGS = {
-  quality: 'high', scale: 1, shadows: 2, bloom: true, ao: true, showFps: false,
+  quality: 'high', scale: 1, shadows: 2, bloom: true, ao: true, showFps: false, autoQuality: true,
   mouseAim: true, sensitivity: 1, invertY: false,
   volMaster: 0.8, volSfx: 1, volUi: 0.8, volEngine: 0.6,
 };
@@ -39,6 +47,7 @@ class App {
     this.autoJoined = false;
     this.lastFrame = performance.now();
     this.settingsSendTimer = null;
+    this.perf = { frames: 0, t: 0, cooldown: 8 };
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem('tanki.settings') || '{}'); } catch (e) { saved = {}; }
     this.settings = { ...DEFAULT_SETTINGS, ...saved };
@@ -59,6 +68,8 @@ class App {
     const text = this.$('loading-text');
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     try {
+      text.textContent = 'Loading assets...';
+      await Assets.init(this.view.renderer);
       text.textContent = 'Connecting to server...';
       await this.net.connect(`${proto}://${location.host}`);
       this.$('loading-fill').style.width = '60%';
@@ -152,8 +163,20 @@ class App {
     this.screens.hideResults();
     this.paused = false;
     this.showScreen(null);
-    this.battle = new BattleClient(this, msg);
-    this.battle.hud.setHint('Click the screen to take control');
+    this.showroom.cancel();
+    const battle = new BattleClient(this, msg);
+    this.battle = battle;
+    const loading = this.$('loading');
+    loading.classList.remove('hidden');
+    this.$('loading-fill').style.width = '70%';
+    this.$('loading-text').textContent = `Loading ${msg.battle && msg.battle.name ? msg.battle.name : 'battle'}...`;
+    battle.buildPromise.then(() => {
+      if (this.battle !== battle) return;
+      this.$('loading-fill').style.width = '100%';
+      loading.classList.add('hidden');
+      battle.hud.setHint('Click the screen to take control');
+      this.perf = { frames: 0, t: 0, cooldown: 8 };
+    });
     this.canvas.focus();
     this.audio.play('click');
   }
@@ -225,6 +248,25 @@ class App {
     setTimeout(() => { el.style.transition = 'opacity 0.4s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 3200);
   }
 
+  /** Step the quality preset down when the battle runs below 40 fps for a while. */
+  autoQuality(dt) {
+    if (!this.settings.autoQuality || !this.battle || !this.battle.ready || this.paused) return;
+    const p = this.perf;
+    if (p.cooldown > 0) { p.cooldown -= dt; return; }
+    p.frames++; p.t += dt;
+    if (p.t < 4) return;
+    const fps = p.frames / p.t;
+    p.frames = 0; p.t = 0;
+    const order = ['ultra', 'high', 'medium', 'low'];
+    const i = order.indexOf(this.settings.quality);
+    if (fps < 40 && i >= 0 && i < order.length - 1) {
+      const q = order[i + 1];
+      this.setSettings({ quality: q, ...QUALITY_PRESETS[q] });
+      this.toast(`Graphics set to ${q} for a smoother frame rate (Settings to change)`);
+      p.cooldown = 10;
+    }
+  }
+
   quit() { if (window.tanki) window.tanki.quit(); }
 
   loop() {
@@ -235,7 +277,8 @@ class App {
     try {
       if (this.battle) this.battle.update(dt);
       else if (this.showroom.built) this.showroom.update(dt);
-      this.view.render();
+      this.view.render(dt);
+      this.autoQuality(dt);
     } catch (e) {
       if (!this._loggedLoopError) { this._loggedLoopError = true; console.error('[tanki] frame error', e.stack || e); }
     }

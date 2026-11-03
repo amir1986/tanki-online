@@ -281,3 +281,16 @@ label.check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 ::-webkit-scrollbar { width: 10px; }
 ::-webkit-scrollbar-thumb { background: #263645; border-radius: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* nameplates (CSS2D layer) */
+#labels { z-index: 5; }
+.nameplate { pointer-events: none; text-align: center; transform: translateY(-50%); font-family: inherit; white-space: nowrap; }
+.nameplate .nm { display: inline-block; font-weight: 700; font-size: 13px; letter-spacing: 0.2px; color: #fff; text-shadow: 0 0 2px #000, 0 1px 3px rgba(0,0,0,0.9); }
+.nameplate .rk { color: rgba(255,255,255,0.75); font-weight: 600; margin-right: 4px; }
+.nameplate.r .nm { color: #ff8a80; }
+.nameplate.b .nm { color: #82b1ff; }
+.nameplate.me .nm { color: #b2ff59; }
+.nameplate.jug .nm { color: #ffd54f; }
+.nameplate .hp { width: 68px; height: 5px; margin: 3px auto 0; background: rgba(0,0,0,0.55); border-radius: 3px; overflow: hidden; border: 1px solid rgba(0,0,0,0.5); }
+.nameplate .hp i { display: block; height: 100%; background: #7ed321; border-radius: 3px; transition: width 0.15s; }
+.nameplate .hp i.low { background: #ff5252; }

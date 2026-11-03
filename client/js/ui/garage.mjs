@@ -2,20 +2,15 @@
 import * as THREE from 'three';
 import { HULLS, TURRETS, PAINTS, SUPPLIES, hullStats, turretStats, upgradePrice, upgradeRank, rankForXp, RANKS, MAX_MOD, getHull, getTurret, getPaint } from '/shared/items.mjs';
 import { buildTank } from '../render/tankmesh.mjs';
-import { buildSky } from '../render/sky.mjs';
+import { buildSky, HDRI_FOR } from '../render/sky.mjs';
 import { Textures } from '../render/textures.mjs';
+import { Assets } from '../render/assets.mjs';
+import { TANK_MODELS } from '../render/tankmesh.mjs';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const hex = (c) => '#' + c.toString(16).padStart(6, '0');
 
-const SHOWROOM_THEME = {
-  ground: 'sand',
-  sky: { top: 0x1d2d4a, horizon: 0xf2b677, ground: 0x4a3a30 },
-  fog: { color: 0xd9a070, near: 60, far: 220 }, fogDensity: 0.0015,
-  sun: [-60, 22, 80], sunColor: 0xffd2a0, sunIntensity: 2.6,
-  hemi: [0x9fb8e8, 0x6a5040], hemiIntensity: 0.8,
-  turbidity: 8, rayleigh: 2.5, mie: 0.012, envIntensity: 0.7,
-};
+const SHOWROOM_THEME = { ground: 'sand', envIntensity: 1.0, sunIntensity: 2.0, fogDensity: 0.0012 };
 
 export class Showroom {
   constructor(view) {
@@ -25,11 +20,28 @@ export class Showroom {
     this.t = 0;
     this.built = false;
     this.equip = null;
+    this.token = 0;
   }
 
+  /** Cancel a pending build (a battle is starting). */
+  cancel() { this.token++; this.built = false; }
+
   build(equip) {
+    const token = ++this.token;
+    this.built = false;
+    return this._build(equip, token).catch((e) => console.error('[tanki] showroom failed', e));
+  }
+
+  async _build(equip, token) {
+    const [hdri] = await Promise.all([
+      Assets.hdri(HDRI_FOR.showroom),
+      Assets.models(TANK_MODELS),
+      Assets.preloadSets(['sand', 'metal', 'planks', 'corrugated', 'metalPainted', 'rubber', 'metalDirty', 'fabric']),
+    ]);
+    await Assets.ready();
+    if (token !== this.token) return;
     this.view.clearScene();
-    this.sky = buildSky(SHOWROOM_THEME, this.scene, this.view.renderer);
+    this.sky = buildSky(SHOWROOM_THEME, this.scene, this.view.renderer, hdri);
     const sand = Textures.ground('sand');
     const tex = sand.map.clone(); tex.repeat.set(30, 30); tex.needsUpdate = true;
     const ntex = sand.normal.clone(); ntex.repeat.set(30, 30); ntex.needsUpdate = true;
@@ -70,7 +82,7 @@ export class Showroom {
     if (this.tank && this.equip && this.equip.hull === equip.hull && this.equip.turret === equip.turret && this.equip.paint === equip.paint) return;
     if (this.tank) { this.scene.remove(this.tank.group); this.tank.dispose(); }
     this.tank = buildTank({ hull: equip.hull, turret: equip.turret, paint: equip.paint, team: 0 });
-    this.tank.group.position.y = 0.3 + this.tank.size[1] / 2 + 0.45;
+    this.tank.group.position.y = 0.3 + this.tank.size[1] / 2 + 0.02;
     this.scene.add(this.tank.group);
     this.equip = { ...equip };
   }

@@ -3,6 +3,7 @@
 import { vadd, vsub, vscale, vdot, vnorm, vlen, vcross, vdist, dirToYaw, angleDiff, clamp, qRotate } from './math.mjs';
 import { MASK_STATIC, MASK_ALL } from './world.mjs';
 import { TURRETS } from '../items.mjs';
+import { MUZZLE_HEIGHT } from '../constants.mjs';
 import * as CANNON from 'cannon-es';
 
 export const TURRET_INDEX = Object.fromEntries(TURRETS.map((t, i) => [t.id, i]));
@@ -40,7 +41,7 @@ export function muzzle(p) {
   const dir = sim.turretDir();
   const up = sim.up;
   const len = sim.size[2] / 2 + 0.9;
-  const from = vadd(vadd(pivot, vscale(dir, len)), vscale(up, 0.42));
+  const from = vadd(vadd(pivot, vscale(dir, len)), vscale(up, MUZZLE_HEIGHT));
   return { from, dir, pivot, up };
 }
 

@@ -70,6 +70,7 @@ function pickTarget(room, p) {
     let s = 100 - d + (los ? 45 : 0);
     if (o.flag) s += 40;
     if (o.jugger) s += 70;
+    if (room.ball && room.ball.carrier === o.id) s += 80;
     if (o.hp < o.maxHp * 0.3) s += 15;
     if (d < p.turret.range) s += 10;
     if (s > bestScore) { bestScore = s; best = o; }
@@ -103,6 +104,23 @@ function pickGoal(room, p) {
       return objective({ pos: fe.pos, kind: 'enemyflag' });
     }
     return { pos: jitter(map.flags[own], 9), kind: 'defend', hold: 5 + rng() * 5 };
+  }
+  if (room.mode === 'RGB' && p.team && room.ball) {
+    const ball = room.ball;
+    const own = p.team === 1 ? 'red' : 'blue', enemy = p.team === 1 ? 'blue' : 'red';
+    if (ball.carrier === p.id) return objective({ pos: map.flags[enemy], kind: 'home' });
+    if (ball.carrier == null) {
+      if (b.role === 'attack' || rng() < 0.5) return { pos: ball.pos, kind: 'ball', hold: 3 };
+      return { pos: jitter(map.flags[own], 8), kind: 'defend', hold: 4 + rng() * 4 };
+    }
+    const carrier = room.players.get(ball.carrier);
+    if (carrier && carrier.team === p.team) return objective({ pos: jitter(carrier.sim ? carrier.sim.pos : ball.pos, 7), kind: 'escort' });
+    if (carrier && carrier.sim) return { pos: carrier.sim.pos, kind: 'carrier', hold: 2 };
+  }
+  if (room.mode === 'SGE' && p.team && room.siege) {
+    const pt = room.points[0];
+    if (p.team === room.siege.attacker) return objective({ pos: jitter(pt.pos, 3), kind: 'point' });
+    return { pos: jitter(pt.pos, 7), kind: 'defend', hold: 5 + rng() * 5 };
   }
   if (room.mode === 'CP' && p.team) {
     const targets = room.points.filter((pt) => pt.owner !== p.team);
@@ -165,9 +183,19 @@ export function botThink(room, p, dt) {
     b.goal = pickGoal(room, p);
     b.goalT = b.goal.hold || 4;
   }
-  if (b.goal && ['hunt', 'escort', 'ownflag', 'enemyflag', 'home'].includes(b.goal.kind)) {
+  if (b.goal && ['hunt', 'escort', 'ownflag', 'enemyflag', 'home', 'ball', 'carrier'].includes(b.goal.kind)) {
     const g = pickGoal(room, p);
-    if (g.kind === b.goal.kind) b.goal.pos = g.pos; else if (g.kind === 'home' || b.goal.kind === 'hunt') { b.goal = g; b.goalT = g.hold || 4; }
+    if (g.kind === b.goal.kind) b.goal.pos = g.pos; else if (g.kind === 'home' || b.goal.kind === 'hunt' || b.goal.kind === 'ball' || b.goal.kind === 'carrier') { b.goal = g; b.goalT = g.hold || 4; }
+  }
+  // rugby: the carrier aims at the goal and throws when close enough, otherwise never fires
+  const carrying = room.ball && room.ball.carrier === p.id;
+  if (carrying) {
+    const goalPos = room.map.flags[p.team === 1 ? 'blue' : 'red'];
+    const toGoal = vsub(goalPos, pos);
+    const dGoal = Math.hypot(toGoal[0], toGoal[2]);
+    c.yaw = dirToYaw(toGoal);
+    const aligned = Math.abs(angleDiff(sim.yaw + p.turretYaw, c.yaw)) < 0.25;
+    c.fire = aligned && dGoal < 20 && dGoal > 6 && room.pw.hasLineOfSight(vadd(pos, [0, 1.2, 0]), vadd(goalPos, [0, 1.5, 0]));
   }
 
   // -- where to drive
@@ -231,7 +259,7 @@ export function botThink(room, p, dt) {
 
   // -- aiming
   let fire = false;
-  if (target) {
+  if (target && !carrying) {
     const tp = vadd(target.sim.pos, [0, 0.3, 0]);
     const d = vlen(vsub(tp, pos));
     let aimAt = tp;
@@ -263,10 +291,10 @@ export function botThink(room, p, dt) {
         fire = !c.fire;
       }
     }
-  } else {
+  } else if (!carrying) {
     c.yaw = hullYaw;
   }
-  c.fire = fire;
+  if (!carrying) c.fire = fire;
 
   // -- supplies
   b.supplyT -= dt;

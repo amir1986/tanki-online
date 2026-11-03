@@ -147,11 +147,18 @@ export const DEFAULT_PROFILE = () => ({
   hulls: { wasp: 0 },        // id -> modification level
   turrets: { smoky: 0 },
   paints: ['green'],
-  equipped: { hull: 'wasp', turret: 'smoky', paint: 'green' },
+  equipped: { hull: 'wasp', turret: 'smoky', paint: 'green', drone: null },
   supplies: { repair: 5, da: 3, dd: 3, nitro: 3, mine: 3 },
-  stats: { kills: 0, deaths: 0, battles: 0, flags: 0, gold: 0, score: 0, wins: 0 },
+  stats: { kills: 0, deaths: 0, battles: 0, flags: 0, gold: 0, score: 0, wins: 0, goals: 0, sieges: 0 },
   settings: {},
   missions: null,
   tutorialDone: false,
+  drones: {},            // drone id -> true
+  augments: {},          // turret id -> equipped augment id
+  augmentsOwned: [],
+  containers: 1,
+  containerXp: 0,
+  containersOpened: 0,
+  clan: null,            // { id, tag, name }
   created: Date.now(),
 });

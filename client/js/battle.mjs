@@ -8,10 +8,16 @@ import { getTurret, getHull, getSupply, RANKS, hullStats } from '/shared/items.m
 import { qToYaw, angleDiff } from '/shared/sim/math.mjs';
 import { buildTerrain } from './render/terrain.mjs';
 import { buildSky } from './render/sky.mjs';
-import { buildProps, buildClutter, buildFlagBase, buildFlag, animateFlag, buildControlPoint, setControlPointState } from './render/props.mjs';
+import { buildProps, buildClutter, buildFlagBase, buildFlag, animateFlag, buildControlPoint, setControlPointState, buildBall } from './render/props.mjs';
+import { buildFoliage } from './render/foliage.mjs';
 import { buildTank } from './render/tankmesh.mjs';
 import { Effects, TURRET_COLORS } from './render/effects.mjs';
-import { Textures } from './render/textures.mjs';
+import { Textures, TEXTURE_SETS } from './render/textures.mjs';
+import { Assets } from './render/assets.mjs';
+import { TANK_MODELS } from './render/tankmesh.mjs';
+import { skyFor } from './render/sky.mjs';
+import { propModelIds } from './render/props.mjs';
+import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { Hud } from './ui/hud.mjs';
 import { Tutorial } from './ui/tutorial.mjs';
 
@@ -22,18 +28,20 @@ const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3(), tmpQ = new THREE.
 const DROP_COLORS = { repair: 0xff4d4d, da: 0x4da6ff, dd: 0xffb84d, nitro: 0x7dff7d, gold: 0xffd54f };
 const DROP_NAMES = { repair: 'Repair kit', da: 'Double armor', dd: 'Double damage', nitro: 'Nitro', gold: 'Gold box' };
 
-function makeLabel(name, team, rank, hpFrac, isMe, jugger = false) {
-  const c = document.createElement('canvas'); c.width = 256; c.height = 72;
-  const ctx = c.getContext('2d');
-  ctx.font = 'bold 26px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-  const txt = (jugger ? '♛ ' : '') + (rank != null && RANKS[rank] ? RANKS[rank].name.split(' ')[0].slice(0, 10) + ' ' : '') + name;
-  ctx.strokeText(txt, 128, 22);
-  ctx.fillStyle = jugger ? '#ffd54f' : isMe ? '#9cf046' : team === 1 ? '#ff6f60' : team === 2 ? '#64b5f6' : '#ffffff';
-  ctx.fillText(txt, 128, 22);
-  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(48, 46, 160, 12);
-  ctx.fillStyle = hpFrac > 0.3 ? '#7ed321' : '#ff4d4d'; ctx.fillRect(50, 48, 156 * Math.max(0, Math.min(1, hpFrac)), 8);
-  return c;
+/** DOM nameplate (CSS2D): rank + name and a health bar, constant screen size. */
+function makeNameplate(r, isMe) {
+  const el = document.createElement('div');
+  const obj = new CSS2DObject(el);
+  obj.userData.el = el;
+  refreshNameplate(obj, r, isMe, 1, false);
+  return obj;
+}
+function refreshNameplate(obj, r, isMe, hpFrac, jugger) {
+  const el = obj.userData.el;
+  el.className = 'nameplate' + (jugger ? ' jug' : isMe ? ' me' : r.team === 1 ? ' r' : r.team === 2 ? ' b' : '');
+  const rank = r.rank != null && RANKS[r.rank] ? RANKS[r.rank].name.split(' ')[0].slice(0, 10) : '';
+  el.innerHTML = `<span class="nm">${jugger ? '&#9819; ' : ''}${rank ? `<span class="rk">${esc(rank)}</span>` : ''}${esc(r.name)}</span><div class="hp"><i style="width:${Math.round(hpFrac * 100)}%"></i></div>`;
+  obj.userData.hp = el.querySelector('.hp i');
 }
 
 export class BattleClient {
@@ -75,42 +83,16 @@ export class BattleClient {
     this.loops = new Set();
     this.lastSnapAt = performance.now();
 
-    // scene
-    this.view.clearScene();
-    this.sky = buildSky(this.map.theme, this.scene, this.view.renderer);
-    this.sky.setShadowQuality(app.settings.shadows);
-    this.terrain = buildTerrain(this.map);
-    this.scene.add(this.terrain);
-    this.props = buildProps(this.map);
-    this.scene.add(this.props);
-    this.clutter = buildClutter(this.map);
-    this.scene.add(this.clutter);
-    this.cam.setOccluders([
-      ...this.props.children.filter((m) => m.isMesh && m.userData.prop && m.userData.prop.kind !== 'ramp'),
-      ...this.terrain.children.filter((m) => m.name === 'terrain'),
-    ]);
-    this.effects = new Effects(this.scene);
-    this.objective = new THREE.Group();
-    this.scene.add(this.objective);
-    this.flags = {};
+    // scene (built asynchronously once the map's assets are loaded); handlers may run before it exists
     this.points = [];
-    if (this.mode === 'CTF') {
-      for (const [color, team] of [['red', 1], ['blue', 2]]) {
-        this.objective.add(buildFlagBase(this.map.flags[color], team));
-        const f = buildFlag(team);
-        f.position.set(...this.map.flags[color]);
-        this.objective.add(f);
-        this.flags[color] = f;
-      }
-    } else if (this.mode === 'CP') {
-      for (const p of this.info.points) {
-        const g = buildControlPoint(p.pos, p.id);
-        this.objective.add(g);
-        this.points.push({ id: p.id, g, owner: 0, capTeam: 0, cap: 0 });
-      }
-    }
-    this.cam.initialized = false;
-    this.cam.distance = 11;
+    this.flags = {};
+    this.effects = null;
+    this.sky = null;
+    this.foliage = null;
+    this.ready = false;
+    this.destroyed = false;
+    this.pendingRoster = null;
+    this.buildPromise = this.build().catch((e) => console.error('[tanki] battle build failed', e));
 
     // HUD
     this.hud = new Hud(document.getElementById('hud'), {
@@ -151,8 +133,65 @@ export class BattleClient {
     this.tutorial = this.info.opts && this.info.opts.training ? new Tutorial(this) : null;
   }
 
+
+  /** Load the sky, scanned models and texture sets for this map, then build the scene. */
+  async build() {
+    const app = this.app;
+    this.view.clearScene();
+    const quality = app.settings.quality === 'low' ? 0.3 : app.settings.quality === 'medium' ? 0.6 : 1;
+    const [hdri] = await Promise.all([
+      Assets.hdri(skyFor(this.map)),
+      Assets.models([...TANK_MODELS, ...propModelIds(this.map)]),
+      Assets.preloadSets(TEXTURE_SETS),
+    ]);
+    if (this.destroyed) return;
+    this.sky = buildSky(this.map.theme, this.scene, this.view.renderer, hdri);
+    this.sky.setShadowQuality(app.settings.shadows);
+    this.terrain = buildTerrain(this.map);
+    this.scene.add(this.terrain);
+    this.props = buildProps(this.map);
+    this.scene.add(this.props);
+    this.clutter = buildClutter(this.map);
+    this.scene.add(this.clutter);
+    this.foliage = buildFoliage(this.map, quality);
+    this.scene.add(this.foliage);
+    this.ballMesh = null;
+    if (this.mode === 'RGB') { this.ballMesh = buildBall(); this.ballMesh.visible = false; this.scene.add(this.ballMesh); }
+    const occluders = this.terrain.children.filter((m) => m.name === 'terrain');
+    this.props.traverse((o) => { if (o.isMesh && o.userData.prop && o.userData.prop.kind !== 'ramp' && o.userData.prop.kind !== 'tree') occluders.push(o); });
+    this.cam.setOccluders(occluders);
+    this.cam.setBounds(this.map.halfW - 1.1, this.map.halfL - 1.1);
+    this.effects = new Effects(this.scene);
+    this.objective = new THREE.Group();
+    this.scene.add(this.objective);
+    this.flags = {};
+    this.points = [];
+    if (this.mode === 'CTF') {
+      for (const [color, team] of [['red', 1], ['blue', 2]]) {
+        this.objective.add(buildFlagBase(this.map.flags[color], team));
+        const f = buildFlag(team);
+        f.position.set(...this.map.flags[color]);
+        this.objective.add(f);
+        this.flags[color] = f;
+      }
+    } else if (this.mode === 'CP' || this.mode === 'SGE') {
+      for (const p of this.info.points) {
+        const g = buildControlPoint(p.pos, p.id);
+        this.objective.add(g);
+        this.points.push({ id: p.id, g, owner: 0, capTeam: 0, cap: 0 });
+      }
+    }
+    this.cam.initialized = false;
+    this.cam.distance = 11;
+    await Assets.ready();
+    if (this.destroyed) return;
+    this.ready = true;
+    if (this.pendingRoster) { const list = this.pendingRoster; this.pendingRoster = null; this.applyRoster(list); }
+  }
+
   // ---- roster / tanks ---------------------------------------------------------------
   applyRoster(list) {
+    if (!this.ready) { this.pendingRoster = list; return; }
     const seen = new Set();
     for (const r of list) {
       seen.add(r.id);
@@ -166,9 +205,7 @@ export class BattleClient {
         const mesh = buildTank({ hull: r.hull, turret: r.turret, paint: r.paint, team: r.team });
         mesh.group.visible = false;
         this.scene.add(mesh.group);
-        const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(makeLabel(r.name, r.team, r.rank, 1, r.id === this.myId)), transparent: true, depthTest: false }));
-        label.material.map.colorSpace = THREE.SRGBColorSpace;
-        label.scale.set(3.6, 1.0, 1);
+        const label = makeNameplate(r, r.id === this.myId);
         label.visible = false;
         this.scene.add(label);
         const aura = new THREE.Mesh(new THREE.SphereGeometry(Math.max(...mesh.size) * 0.75, 18, 12), new THREE.MeshBasicMaterial({ color: 0x4da6ff, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -179,7 +216,7 @@ export class BattleClient {
       } else if (t.team !== r.team || t.name !== r.name || t.rank !== r.rank) {
         t.team = r.team; t.name = r.name; t.rank = r.rank;
         t.mesh.setTeam(r.team);
-        t.lastHp = -1;
+        refreshNameplate(t.label, r, r.id === this.myId, Math.max(0, t.lastHp), !!t.jugger);
       }
       t.maxHp = r.maxHp;
       if (r.id === this.myId) { this.me.team = r.team; this.me.maxHp = r.maxHp; }
@@ -288,6 +325,7 @@ export class BattleClient {
   onRestart(m) {
     this.running = true;
     this.snaps.length = 0;
+    if (!this.ready) { this.applyRoster(m.players || []); return; }
     this.effects.clear();
     for (const p of this.projectiles.values()) this.scene.remove(p.mesh);
     this.projectiles.clear();
@@ -307,6 +345,7 @@ export class BattleClient {
   nameHtml(id) { const r = this.roster.get(id); if (!r) return '?'; return `<span class="${this.isMe(id) ? 'me' : teamCls(r.team)}">${esc(r.name)}</span>`; }
 
   onEvent(e) {
+    if (!this.ready) return;
     const fx = this.effects, au = this.audio, hud = this.hud;
     if (this.tutorial) this.tutorial.onEvent(e);
     switch (e.e) {
@@ -318,7 +357,7 @@ export class BattleClient {
         hud.notify(this.isMe(e.p) ? 'You are the Juggernaut!' : `${this.nameOf(e.p)} is the Juggernaut!`, 'gold');
         au.play('countdown');
         const t = this.tanks.get(e.p);
-        if (t) t.lastHp = -1;
+        if (t) refreshNameplate(t.label, this.roster.get(t.id) || t, t.id === this.myId, Math.max(0, t.lastHp), true);
         break;
       }
       case 'shot': {
@@ -464,6 +503,7 @@ export class BattleClient {
 
   // ---- frame ---------------------------------------------------------------------------
   update(dt) {
+    if (!this.ready) return;
     this.now += dt;
     const snaps = this.snaps;
     if (!snaps.length) return;
@@ -509,12 +549,12 @@ export class BattleClient {
       const firing = !!(s.flags & TF.FIRING);
       t.mesh.animate(dt, s.speed, firing && t.turret === 'vulcan');
       // label
-      t.label.position.set(pos[0], pos[1] + t.tsize[1] / 2 + 1.5, pos[2]);
+      t.label.position.set(pos[0], pos[1] + t.tsize[1] / 2 + 1.25, pos[2]);
       const hpFrac = t.maxHp ? s.hp / t.maxHp : 1;
-      if (Math.abs(hpFrac - t.lastHp) > 0.015) {
+      if (Math.abs(hpFrac - t.lastHp) > 0.01) {
         t.lastHp = hpFrac;
-        t.label.material.map.image = makeLabel(t.name, t.team, t.rank, hpFrac, t.id === this.myId, !!t.jugger);
-        t.label.material.map.needsUpdate = true;
+        const bar = t.label.userData.hp;
+        if (bar) { bar.style.width = Math.round(Math.max(0, Math.min(1, hpFrac)) * 100) + '%'; bar.classList.toggle('low', hpFrac < 0.3); }
       }
       t.label.visible = t.id !== this.myId || !this.cam.sniper;
       // status visuals
@@ -528,7 +568,7 @@ export class BattleClient {
         else { t.aura.material.color.setHex(0xff8040); t.aura.material.opacity = 0.04 + 0.03 * pulse; }
         if (dd && da) t.aura.material.color.setHex(0xc080ff);
       } else t.aura.visible = false;
-      if (!!jug !== !!t.jugger) { t.jugger = !!jug; t.lastHp = -1; }
+      if (!!jug !== !!t.jugger) { t.jugger = !!jug; refreshNameplate(t.label, this.roster.get(t.id) || t, t.id === this.myId, hpFrac, t.jugger); }
       if (jug && Math.random() < dt * 20) this.effects.sparks.emit({ pos: [pos[0] + (Math.random() - 0.5) * 2.4, pos[1] + Math.random() * 1.2, pos[2] + (Math.random() - 0.5) * 2.4], vel: [0, 1.5, 0], color: 0xffc040, size: 0.3, life: 0.8 });
       if (s.flags & TF.BURNING) this.effects.burnEmit(pos, dt);
       if (s.flags & TF.FROZEN) this.effects.frostEmit(pos, dt);
@@ -617,6 +657,8 @@ export class BattleClient {
     this.sky.update(this.view.camera, meTank && meTank.visible ? meTank.pos : new THREE.Vector3(...me.pos));
     this.audio.setListener([this.view.camera.position.x, this.view.camera.position.y, this.view.camera.position.z], Math.atan2(-this.view.camera.matrixWorld.elements[8], -this.view.camera.matrixWorld.elements[10]));
     this.audio.updateEngine(dt, me.state ? Math.min(1, Math.abs(me.state.speed) / 12) : 0, me.alive && !this.paused);
+    if (this.foliage && this.foliage.userData.update) this.foliage.userData.update(dt, this.view.camera.position, meTank && meTank.visible ? meTank.pos : null);
+    this.effects.ambient(dt, this.view.camera.position, this.map.theme.ground);
     this.effects.update(dt);
 
     // input send
@@ -663,6 +705,7 @@ export class BattleClient {
   }
 
   destroy() {
+    this.destroyed = true;
     for (const u of this.unsubs) u();
     if (this.tutorial) { this.tutorial.destroy(); this.tutorial = null; }
     this.stopLoops();
@@ -672,10 +715,12 @@ export class BattleClient {
     this.input.textFocus = false;
     this.input.releaseLock();
     this.hud.hide();
-    this.effects.clear();
+    if (this.effects) this.effects.clear();
+    if (this.foliage && this.foliage.userData.dispose) this.foliage.userData.dispose();
     for (const t of this.tanks.values()) { t.mesh.dispose(); }
     this.tanks.clear();
     this.cam.setOccluders([]);
+    this.cam.setBounds(null, null);
     if (this.sky && this.sky.dispose) this.sky.dispose();
     this.view.clearScene();
   }

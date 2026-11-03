@@ -180,24 +180,40 @@ export class GameAudio {
     if (this.engine) { this.engine.g.gain.value = 0; }
   }
 
-  /** Local tank engine: speedNorm 0..1, on/off. */
+  /** Local tank engine: a soft diesel rumble (filtered noise + low harmonics with a slow throb), speedNorm 0..1. */
   updateEngine(dt, speedNorm, on) {
     if (!this.ctx) return;
     if (!this.engine) {
-      const o = this.ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 50;
-      const o2 = this.ctx.createOscillator(); o2.type = 'square'; o2.frequency.value = 25;
-      const f = this.ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 300;
-      const g = this.ctx.createGain(); g.gain.value = 0;
-      o.connect(f); o2.connect(f); f.connect(g); g.connect(this.sfxGain);
-      o.start(); o2.start();
-      this.engine = { o, o2, f, g, rpm: 0 };
+      const ctx = this.ctx;
+      const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = 38;
+      const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = 76;
+      const og = ctx.createGain(); og.gain.value = 0.55;
+      const len = ctx.sampleRate * 2;
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < len; i++) { last = (last + (Math.random() * 2 - 1) * 0.08) * 0.985; d[i] = last; } // brown-ish noise
+      const n = ctx.createBufferSource(); n.buffer = buf; n.loop = true;
+      const nf = ctx.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 160; nf.Q.value = 0.7;
+      const ng = ctx.createGain(); ng.gain.value = 1.6;
+      const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 200; f.Q.value = 0.4;
+      const g = ctx.createGain(); g.gain.value = 0;
+      const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 7;
+      const lfoG = ctx.createGain(); lfoG.gain.value = 0.012;
+      lfo.connect(lfoG); lfoG.connect(g.gain);
+      o.connect(og); o2.connect(og); og.connect(f);
+      n.connect(nf); nf.connect(ng); ng.connect(f);
+      f.connect(g); g.connect(this.sfxGain);
+      o.start(); o2.start(); n.start(); lfo.start();
+      this.engine = { o, o2, f, g, lfo, rpm: 0 };
     }
     const E = this.engine;
-    E.rpm += ((on ? 0.25 + speedNorm * 0.75 : 0) - E.rpm) * Math.min(1, dt * 3);
+    E.rpm += ((on ? 0.2 + speedNorm * 0.8 : 0) - E.rpm) * Math.min(1, dt * 2.5);
     const t = this.ctx.currentTime;
-    E.o.frequency.setTargetAtTime(45 + E.rpm * 70, t, 0.05);
-    E.o2.frequency.setTargetAtTime(22 + E.rpm * 35, t, 0.05);
-    E.f.frequency.setTargetAtTime(250 + E.rpm * 500, t, 0.05);
-    E.g.gain.setTargetAtTime(on ? this.volume.engine * (0.12 + E.rpm * 0.14) : 0, t, 0.1);
+    E.o.frequency.setTargetAtTime(34 + E.rpm * 38, t, 0.08);
+    E.o2.frequency.setTargetAtTime(68 + E.rpm * 76, t, 0.08);
+    E.f.frequency.setTargetAtTime(150 + E.rpm * 260, t, 0.08);
+    E.lfo.frequency.setTargetAtTime(5 + E.rpm * 9, t, 0.1);
+    E.g.gain.setTargetAtTime(on ? this.volume.engine * (0.06 + E.rpm * 0.08) : 0, t, 0.15);
   }
 }

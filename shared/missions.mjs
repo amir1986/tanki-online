@@ -12,6 +12,8 @@ export const MISSION_TYPES = {
   wins:       { text: 'Win {n} battles', min: 1, max: 3, reward: [180, 220] },
   damage:     { text: 'Deal {n} damage', min: 1500, max: 6000, reward: [0.07, 0.09] },
   juggernaut: { text: 'Destroy the Juggernaut {n} times', min: 2, max: 5, reward: [90, 120], modes: ['JGR'] },
+  goals:      { text: 'Score {n} goals', min: 2, max: 5, reward: [90, 120], modes: ['RGB'] },
+  sieges:     { text: 'Win {n} siege rounds', min: 2, max: 4, reward: [100, 140], modes: ['SGE'] },
 };
 const TYPE_IDS = Object.keys(MISSION_TYPES);
 

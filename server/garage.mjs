@@ -1,6 +1,9 @@
 // Garage transactions on a profile: buy / upgrade / equip / supplies.
 import { getHull, getTurret, getPaint, getSupply, upgradePrice, upgradeRank, rankForXp, MAX_MOD, HULLS, TURRETS, PAINTS } from '../shared/items.mjs';
 import { TUTORIAL_REWARD } from '../shared/constants.mjs';
+import { getDrone } from '../shared/drones.mjs';
+import { getAugment } from '../shared/augments.mjs';
+import { openContainer } from '../shared/containers.mjs';
 
 const KINDS = { hull: { get: getHull, key: 'hulls' }, turret: { get: getTurret, key: 'turrets' } };
 
@@ -69,6 +72,47 @@ export function garageOp(profile, op, kind, id, n = 1) {
       profile.supplies[id] = (profile.supplies[id] | 0) + n;
       return { ok: true, msg: `${n} x ${s.name} purchased` };
     }
+    case 'buyDrone': {
+      const d = getDrone(id);
+      if (!d) return { ok: false, msg: 'Unknown drone' };
+      if (profile.drones[id]) return { ok: false, msg: 'Already owned' };
+      if (rank < d.rank) return { ok: false, msg: 'Rank too low' };
+      if (profile.crystals < d.price) return { ok: false, msg: 'Not enough crystals' };
+      profile.crystals -= d.price;
+      profile.drones[id] = true;
+      profile.equipped.drone = id;
+      return { ok: true, msg: `${d.name} drone purchased` };
+    }
+    case 'equipDrone': {
+      if (id && !profile.drones[id]) return { ok: false, msg: 'Not owned' };
+      profile.equipped.drone = id || null;
+      return { ok: true, msg: id ? 'Drone equipped' : 'Drone removed' };
+    }
+    case 'buyAugment': {
+      const a = getAugment(id);
+      if (!a) return { ok: false, msg: 'Unknown augment' };
+      if (profile.augmentsOwned.includes(id)) return { ok: false, msg: 'Already owned' };
+      if (profile.turrets[a.turret] == null) return { ok: false, msg: 'You need to own the turret first' };
+      if (rank < a.rank) return { ok: false, msg: 'Rank too low' };
+      if (profile.crystals < a.price) return { ok: false, msg: 'Not enough crystals' };
+      profile.crystals -= a.price;
+      profile.augmentsOwned.push(id);
+      profile.augments[a.turret] = id;
+      return { ok: true, msg: `${a.name} installed` };
+    }
+    case 'equipAugment': {
+      const a = getAugment(id);
+      if (id && (!a || !profile.augmentsOwned.includes(id))) return { ok: false, msg: 'Not owned' };
+      const turret = a ? a.turret : kind;
+      if (!turret) return { ok: false, msg: 'Bad turret' };
+      if (id) profile.augments[turret] = id; else delete profile.augments[turret];
+      return { ok: true, msg: id ? 'Augment equipped' : 'Augment removed' };
+    }
+    case 'openContainer': {
+      const reward = openContainer(profile);
+      if (!reward) return { ok: false, msg: 'No containers to open' };
+      return { ok: true, msg: `Container opened: ${reward.text}`, reward };
+    }
     case 'tutorialDone': {
       if (profile.tutorialDone) return { ok: false, msg: 'Training reward already collected' };
       profile.tutorialDone = true;
@@ -91,5 +135,7 @@ export function equipFromProfile(profile) {
     hull: profile.equipped.hull, hullMod: profile.hulls[profile.equipped.hull] | 0,
     turret: profile.equipped.turret, turretMod: profile.turrets[profile.equipped.turret] | 0,
     paint: profile.equipped.paint,
+    augment: (profile.augments && profile.augments[profile.equipped.turret]) || null,
+    drone: profile.equipped.drone || null,
   };
 }

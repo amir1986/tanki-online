@@ -18,7 +18,7 @@ export class Net {
 
   emit(type, msg) {
     const set = this.handlers.get(type);
-    if (set) for (const fn of set) { try { fn(msg); } catch (e) { console.error('handler error', type, e); } }
+    if (set) for (const fn of set) { try { fn(msg); } catch (e) { console.error('handler error', type, (e && e.stack) || e); } }
   }
 
   connect(url) {

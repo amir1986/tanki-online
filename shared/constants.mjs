@@ -15,11 +15,28 @@ export const MODES = {
   CTF: { id: 'CTF', name: 'Capture The Flag', teams: true, desc: 'Steal the enemy flag and bring it home.' },
   CP: { id: 'CP', name: 'Control Points', teams: true, desc: 'Hold the control points to earn points.' },
   JGR: { id: 'JGR', name: 'Juggernaut', teams: false, desc: 'One tank is the Juggernaut with massive armour and firepower. Destroy it to take its place.' },
+  RGB: { id: 'RGB', name: 'Rugby', teams: true, desc: 'Grab the ball and carry or throw it into the enemy goal. The carrier cannot shoot.' },
+  SGE: { id: 'SGE', name: 'Siege', teams: true, desc: 'Attackers must capture the point in the defenders base before the round timer runs out. Roles swap every round.' },
 };
 export const JUGGERNAUT_HP_MULT = 4;
 export const JUGGERNAUT_DAMAGE_MULT = 1.6;
 export const JUGGERNAUT_KILL_SCORE = 30;
 export const TUTORIAL_REWARD = 500;
+// Rugby
+export const BALL_PICKUP_RADIUS = 2.4;
+export const BALL_THROW_SPEED = 24;
+export const BALL_RESET_DELAY = 3;
+export const GOAL_RADIUS = 5;
+// Siege
+export const SIEGE_ROUND_SECONDS = 180;
+export const SIEGE_CAPTURE_SECONDS = 15;
+export const SIEGE_POINT_RADIUS = 7;
+// Containers
+export const CONTAINER_XP = 1000;
+export const MISSIONS_PER_CONTAINER = 3;
+// Clans
+export const CLAN_CREATE_COST = 1000;
+export const CLAN_MAX_MEMBERS = 20;
 
 export const RESPAWN_DELAY = 3.0;        // seconds dead before respawn
 export const SPAWN_PROTECTION = 3.0;     // seconds of invulnerability after spawn
@@ -55,6 +72,10 @@ export const SCORE = {
   CP_CAPTURE: 30,
   CP_HOLD: 1,
   GOLD: 50,
+  GOAL: 100,
+  BALL_PICKUP: 5,
+  SIEGE_CAPTURE: 60,
+  SIEGE_DEFEND: 40,
 };
 
 export const FUND_PER_KILL = 15;
@@ -90,3 +111,6 @@ export const TF = {
   SNIPER: 4096,
   JUGGER: 8192,
 };
+
+/** Height of the gun axis above the hull top (metres); shared by the server muzzle and the client tank model. */
+export const MUZZLE_HEIGHT = 0.3;

@@ -320,6 +320,16 @@ export class Effects {
     if (Math.random() < dt * Math.abs(speed) * 1.5) this.smoke.emit({ pos: [pos[0] + rnd(-1, 1), pos[1] - 0.3, pos[2] + rnd(-1, 1)], vel: [rnd(-1, 1), rnd(0.5, 1.5), rnd(-1, 1)], color: groundColor, size: rnd(0.8, 1.6), life: rnd(0.8, 1.5), drag: 1.5, grow: 2, alpha: 0.3 });
   }
 
+  /** Ambient motes (dust / pollen) drifting around the camera. */
+  ambient(dt, camPos, ground) {
+    const n = Math.min(2, Math.round(dt * 30));
+    const col = ground === 'sand' ? 0xe8d8b0 : ground === 'snow' ? 0xffffff : ground === 'asphalt' ? 0xc8c8c0 : 0xfff4c8;
+    for (let i = 0; i < n; i++) {
+      const p = [camPos.x + rnd(-10, 10), camPos.y + rnd(-3, 4), camPos.z + rnd(-10, 10)];
+      this.sparks.emit({ pos: p, vel: [rnd(-0.3, 0.3), rnd(-0.1, 0.2), rnd(-0.3, 0.3)], color: col, size: rnd(0.02, 0.05), life: rnd(2, 4), alpha: 0.22 });
+    }
+  }
+
   /** Floating damage / heal numbers. */
   number(pos, text, color = '#ffd27a', size = 1) {
     const c = document.createElement('canvas'); c.width = 128; c.height = 64;

@@ -33,6 +33,15 @@ export class ProfileStore {
     out.settings = { ...(p.settings || {}) };
     out.missions = p.missions && Array.isArray(p.missions.list) ? p.missions : null;
     out.tutorialDone = !!p.tutorialDone;
+    out.drones = { ...(p.drones || {}) };
+    out.augments = { ...(p.augments || {}) };
+    out.augmentsOwned = Array.isArray(p.augmentsOwned) ? [...p.augmentsOwned] : [];
+    out.containers = Math.max(0, p.containers == null ? 1 : p.containers | 0);
+    out.containerXp = Math.max(0, p.containerXp | 0);
+    out.containersOpened = Math.max(0, p.containersOpened | 0);
+    out.clan = p.clan && p.clan.tag ? { id: p.clan.id, tag: p.clan.tag, name: p.clan.name } : null;
+    if (out.equipped.drone && !out.drones[out.equipped.drone]) out.equipped.drone = null;
+    for (const [turret, aug] of Object.entries(out.augments)) if (!out.augmentsOwned.includes(aug)) delete out.augments[turret];
     if (!out.hulls[out.equipped.hull] && out.hulls[out.equipped.hull] !== 0) out.equipped.hull = 'wasp';
     if (!out.turrets[out.equipped.turret] && out.turrets[out.equipped.turret] !== 0) out.equipped.turret = 'smoky';
     if (!out.paints.includes(out.equipped.paint)) out.equipped.paint = 'green';

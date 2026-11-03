@@ -1,0 +1,14 @@
+{
+ "ids": [
+  "kloofendal_48d_partly_cloudy_puresky",
+  "farm_field_puresky",
+  "qwantani_noon_puresky",
+  "qwantani_sunset_puresky",
+  "kloofendal_overcast_puresky",
+  "snow_field_puresky",
+  "industrial_sunset_puresky",
+  "belfast_sunset_puresky"
+ ],
+ "source": "https://polyhaven.com/hdris",
+ "license": "CC0 1.0"
+}

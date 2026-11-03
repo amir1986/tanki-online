@@ -1,8 +1,8 @@
 # Tanki Online (desktop)
 
 A Tanki Online style 3D tank battle game for Windows desktop. Electron shell, three.js renderer, cannon-es physics,
-authoritative Node.js battle server with bots. Everything (textures, models, sounds) is generated procedurally, so the
-repository has no binary assets.
+authoritative Node.js battle server with bots. Visuals use scanned CC0 assets (ambientCG PBR textures, Poly Haven HDRI
+skies and props, an OpenGameArt tank) prepared by a small asset pipeline; sounds are generated procedurally.
 
 ![battle](docs/screenshot-battle.jpg)
 ![garage](docs/screenshot-garage.jpg)
@@ -20,9 +20,11 @@ repository has no binary assets.
   training battle with a one-time reward. Profiles are saved per nickname.
 - **Supplies and drops**: repair kit, double armor, double damage, nitro, mines, parachuted supply drops and the gold box.
 - **Bots**: A* navigation over a generated nav grid, objective play per mode, weapon-specific engagement ranges, supply use.
-- **Rendering**: physically based sky with image based lighting, three-layer terrain shading with normal maps, bevelled PBR
-  props, ambient occlusion, bloom, soft shadows, particle effects for every weapon, third person camera with occlusion
-  avoidance and a sniper view for the Shaft.
+- **Rendering**: HDRI skies that also light the scene (PMREM image based lighting, sun placed along the brightest pixel of the
+  sky, fog from its horizon colour), scanned PBR texture sets with normal/roughness/AO maps, three-layer terrain blending,
+  GPU blade grass that bends in the wind and around the tank, scanned props and trees, a CC0 Abrams model fitted to every
+  hull class, AgX tone mapping, ambient occlusion, bloom, soft shadows, CSS2D nameplates, a spring-arm camera that never
+  clips into walls and a sniper view for the Shaft. Quality steps down automatically when the frame rate drops.
 - **Multiplayer ready**: the battle server is authoritative and speaks JSON over WebSocket; run it on a LAN host and
   point several clients at it.
 
@@ -57,12 +59,19 @@ The desktop app starts its own server on a random local port and stores profiles
 
 In dev mode (`npm start` or `--dev`) type `/help` in battle chat for cheats (`/crystals`, `/xp`, `/unlock`, `/supplies`, `/bots N`, `/end`).
 
+## Assets
+
+`client/assets/` holds the CC0 textures, HDRIs and models (about 35 MB). `node tools/assets.mjs` downloads and prepares
+them again from ambientCG and Poly Haven (resize with sharp, mesh simplification and WebP textures with glTF-Transform);
+`tools/blender/split_tank.py` splits the OpenGameArt Abrams into hull, turret and gun with Blender. Sources and licences
+are listed in `client/assets/CREDITS.md`.
+
 ## Project layout
 
 ```
 shared/        catalog, maps, protocol and the simulation (physics, weapons, navigation) used by server and client
 server/        battle rooms, bots, profiles, garage transactions, HTTP + WebSocket server
-client/        three.js client: rendering, effects, HUD, menus, garage
+client/        three.js client: rendering, effects, HUD, menus, garage; client/assets = CC0 textures, HDRIs, models
 electron/      desktop shell (embedded server + window)
 tests/         node:test suites
 tools/         packaging, screenshot and end-to-end helpers
