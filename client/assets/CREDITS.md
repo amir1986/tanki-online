@@ -24,3 +24,10 @@ of every model.
 
 "Abrams tank" by Sketlux, https://opengameart.org/content/abrams-tank (CC0). Split into `tank_hull.glb`,
 `tank_turret.glb` and `tank_gun.glb` with `tools/blender/split_tank.py`.
+
+## Music — OpenGameArt (CC0 1.0)
+
+- "Chill Main Menu Music" by WeaponGuy — https://opengameart.org/content/chill-main-menu-music
+- "Battle Theme A" by JaidynReiman — https://opengameart.org/content/battle-theme-a
+- "Let the Games Begin" by Tozan — https://opengameart.org/content/let-the-games-begin-0
+- "The Rush" by tebruno99 — https://opengameart.org/content/the-rush

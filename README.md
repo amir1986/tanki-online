@@ -12,9 +12,14 @@ skies and props, an OpenGameArt tank) prepared by a small asset pipeline; sounds
 - **Garage**: 7 hulls (Wasp, Hornet, Hunter, Viking, Dictator, Titan, Mammoth), 12 turrets (Smoky, Firebird, Twins, Isida,
   Railgun, Freeze, Thunder, Hammer, Ricochet, Striker, Vulcan, Shaft), 14 paints with turret resistances, M0–M3
   modifications, supplies shop, live 3D preview.
-- **Battle modes**: Deathmatch, Team Deathmatch, Capture the Flag, Control Points and Juggernaut on 7 maps (Sandbox,
-  Polygon, Silence, Kungur, Ruins, Canyon, Frontier). Quick play, a battle list, or create your own battle with custom
-  time/score limits, bot count, friendly fire, supplies and drops.
+- **Battle modes**: Deathmatch, Team Deathmatch, Capture the Flag, Control Points, Juggernaut, Rugby (carry or throw the
+  ball into the enemy goal) and Siege (attack and defend a point in rounds) on 12 maps (Sandbox, Polygon, Silence,
+  Kungur, Ruins, Canyon, Frontier, Arena, Oasis, Highland, Forest, Factory). Play now uses server matchmaking by rank,
+  population and battle age for any mode or a chosen one; or pick from the battle list or create your own battle.
+- **Containers, drones, augments, clans**: loot containers earned from experience, missions and first wins (opened in the
+  garage with a reward popup); six drones that fly beside your tank with passive abilities; thirteen turret augments;
+  clans with tags, members, kick/leave and clan chat (`/c message`), shown on nameplates and scoreboards.
+- **Music**: CC0 soundtrack from OpenGameArt (menu and battle playlists, crossfaded, own volume slider).
 - **Progression**: 30 ranks from Recruit to Generalissimo, experience from kills, assists, flags and points, crystals from
   the battle fund, gold boxes, rank-up bonuses, three daily missions with crystal rewards, a leaderboard and a guided
   training battle with a one-time reward. Profiles are saved per nickname.

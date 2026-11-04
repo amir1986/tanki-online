@@ -9,6 +9,7 @@ import { Garage, Showroom } from './ui/garage.mjs';
 import { BattleClient } from './battle.mjs';
 import { C2S } from '/shared/protocol.mjs';
 import { Assets } from './render/assets.mjs';
+import { Music } from './music.mjs';
 
 export const QUALITY_PRESETS = {
   low: { scale: 0.7, shadows: 1, bloom: false, ao: false },
@@ -20,9 +21,9 @@ export const QUALITY_PRESETS = {
 const DEFAULT_SETTINGS = {
   quality: 'high', scale: 1, shadows: 2, bloom: true, ao: true, showFps: false, autoQuality: true,
   mouseAim: true, sensitivity: 1, invertY: false,
-  volMaster: 0.8, volSfx: 1, volUi: 0.8, volEngine: 0.6,
+  volMaster: 0.8, volSfx: 1, volUi: 0.8, volEngine: 0.6, volMusic: 0.5,
 };
-const SCREENS = ['screen-login', 'screen-menu', 'screen-lobby', 'screen-create', 'screen-garage', 'screen-settings', 'screen-leaderboard', 'overlay-pause'];
+const SCREENS = ['screen-login', 'screen-menu', 'screen-lobby', 'screen-create', 'screen-garage', 'screen-settings', 'screen-leaderboard', 'screen-clan', 'overlay-pause'];
 
 class App {
   constructor() {
@@ -31,6 +32,10 @@ class App {
     this.cam = new FollowCamera(this.view.camera);
     this.input = new Input(this.canvas);
     this.audio = new GameAudio();
+    this.music = new Music(this.audio);
+    this.music.onTrack = (t) => this.toast(`♪ ${t.title} — ${t.author}`);
+    this.clanInfo = null;
+    this.queueMode = 'any';
     this.net = new Net();
     this.screens = new Screens(this);
     this.garage = new Garage(this);
@@ -54,7 +59,7 @@ class App {
     this.applySettings();
     this.bindNet();
     this.input.onAction('pause', () => { if (this.battle && this.paused && this.screen === 'pause') this.closePause(); });
-    const unlock = () => this.audio.init();
+    const unlock = () => { this.audio.init(); this.music.resume(); };
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
     window.addEventListener('error', (e) => console.error('[tanki] error', e.message));
@@ -119,6 +124,7 @@ class App {
       if (this.screen === 'menu') this.screens.renderMenu();
       else if (this.screen === 'garage') this.garage.render();
       else if (this.screen === 'lobby') this.screens.renderLobby();
+      else if (this.screen === 'clan') this.screens.renderClan();
       if (this.showroom.built && !this.battle && this.screen !== 'garage') this.showroom.setTank(this.equip());
     });
     n.on('joined', (m) => this.startBattle(m));
@@ -128,6 +134,8 @@ class App {
     n.on('restart', () => { this.screens.hideResults(); if (this.battle && !this.paused) this.hint('Click to take control'); });
     n.on('garage_ok', (m) => { this.toast(m.msg, m.ok ? '' : 'error'); this.audio.play(m.ok ? 'buy' : 'error'); });
     n.on('leaderboard', (m) => { this.leaderboard = m.top; if (this.screen === 'leaderboard') this.screens.renderLeaderboard(); });
+    n.on('clan', (m) => { this.clanInfo = { clan: m.clan, list: m.list }; if (m.msg) { this.toast(m.msg, m.ok ? '' : 'error'); this.audio.play(m.ok ? 'buy' : 'error'); } if (this.screen === 'clan') this.screens.renderClan(); });
+    n.on('container', (m) => { this.screens.showReward(m.reward, m.left); this.audio.play('gold'); });
     n.on('close', () => {
       this.$('loading').classList.remove('hidden');
       this.$('loading-text').innerHTML = 'Connection to the server was lost.<br><button class="btn" style="margin-top:12px" onclick="location.reload()">Reconnect</button>';
@@ -147,8 +155,10 @@ class App {
     else if (name === 'garage') this.garage.open(!!this.battle);
     else if (name === 'settings') this.screens.renderSettings(back || (this.battle ? 'pause' : 'menu'));
     else if (name === 'leaderboard') { this.screens.renderLeaderboard(); this.net.send({ t: C2S.LEADERBOARD }); }
+    else if (name === 'clan') { this.screens.renderClan(); this.clanOp('list'); }
     else if (name === 'pause') this.screens.renderPause();
     if (el) el.classList.remove('hidden');
+    if (!this.battle) this.music.play('menu');
     if (name !== 'pause' && name !== 'garage' && name !== 'settings') { this.input.enabled = false; }
     if (this.battle && name === 'garage') {
       // garage while in battle shows the showroom in place of the battle scene temporarily? No: keep the battle rendering, overlay panels.
@@ -164,6 +174,7 @@ class App {
     this.paused = false;
     this.showScreen(null);
     this.showroom.cancel();
+    this.music.play('battle');
     const battle = new BattleClient(this, msg);
     this.battle = battle;
     const loading = this.$('loading');
@@ -189,6 +200,7 @@ class App {
     this.screens.hideResults();
     this.input.enabled = false;
     this.showroom.build(this.equip());
+    this.music.play('menu');
   }
 
   openPause() {
@@ -209,14 +221,10 @@ class App {
   joinBattle(id, team) { this.net.send({ t: C2S.JOIN, id, team }); }
   createBattle(opts) { this.net.send({ t: C2S.CREATE, opts }); }
 
-  /** Quick play: prefer running battles that already have players and free slots. */
-  quickPlay() {
-    const list = (this.lobbyData && this.lobbyData.battles) || [];
-    const open = list.filter((b) => b.state === 'running' && b.players < b.max && !b.training);
-    if (!open.length) { this.showScreen('lobby'); return; }
-    open.sort((a, b) => (b.humans - a.humans) || (Math.abs(a.players - 8) - Math.abs(b.players - 8)));
-    this.joinBattle(open[0].id, 0);
-  }
+  /** Quick play: server-side matchmaking (rank, population and battle age), optionally for one mode. */
+  quickPlay(mode = this.queueMode) { this.queue(mode); }
+  queue(mode) { this.net.send({ t: C2S.QUEUE, mode: mode || 'any', team: 0 }); }
+  clanOp(op, data = {}) { this.net.send({ t: C2S.CLAN, op, ...data }); }
 
   startTraining() {
     this.createBattle({ name: `${this.profile.name}'s training`, map: 'sandbox', mode: 'DM', bots: 3, timeLimit: 0, scoreLimit: 0, maxPlayers: 4, training: true, supplies: true, drops: true });
@@ -236,6 +244,7 @@ class App {
     const s = this.settings;
     this.view.setQuality({ scale: s.scale, shadows: s.shadows, bloom: s.bloom, ao: s.ao });
     this.audio.setVolume({ master: s.volMaster, sfx: s.volSfx, ui: s.volUi, engine: s.volEngine });
+    this.music.setVolume(s.volMusic ?? 0.5);
     if (this.battle) { this.battle.sky.setShadowQuality(s.shadows); this.battle.mouseAim = s.mouseAim; }
     if (this.showroom && this.showroom.sky) this.showroom.sky.setShadowQuality(s.shadows);
   }

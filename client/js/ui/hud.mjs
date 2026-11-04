@@ -133,6 +133,23 @@ export class Hud {
       } else el.innerHTML = '<div class="flag-status"><span class="muted">Waiting for a Juggernaut...</span></div>';
       return;
     }
+    if (mode === 'RGB') {
+      const b = extra || {};
+      const txt = b.carrierName ? `${esc(b.carrierName)} has the ball` : b.loose ? 'The ball is loose' : 'Waiting for the ball';
+      const col = b.carrierTeam === 1 ? '#ff8a80' : b.carrierTeam === 2 ? '#90caf9' : '#fff';
+      el.innerHTML = `<div class="flag-status"><span style="color:var(--gold);font-weight:800">RUGBY</span><b style="color:${col}">${txt}</b>${b.me ? '<span class="muted">fire to throw</span>' : ''}</div>`;
+      return;
+    }
+    if (mode === 'SGE') {
+      const s = extra || {};
+      const att = s.attacker === 1 ? 'Red' : 'Blue';
+      const role = s.myTeam ? (s.myTeam === s.attacker ? 'you attack' : 'you defend') : '';
+      const p = points && points[0];
+      const pct = p ? Math.round((p.cap || 0) * 100) : 0;
+      const left = s.left != null ? `${Math.floor(s.left / 60)}:${String(s.left % 60).padStart(2, '0')}` : '';
+      el.innerHTML = `<div class="flag-status"><span style="color:var(--gold);font-weight:800">SIEGE</span><b>Round ${s.round || 1}</b><span class="muted">${att} attacks · ${role} · ${left}</span><div class="hp-bar" style="width:140px;height:12px"><div style="width:${pct}%;background:linear-gradient(${s.attacker === 1 ? '#ff8a80,#c62828' : '#90caf9,#1565c0'})"></div></div></div>`;
+      return;
+    }
     if (mode === 'CTF' && flags) {
       const line = (color, f) => {
         const team = color === 'r' ? 1 : 2;
@@ -206,7 +223,7 @@ export class Hud {
     el.classList.remove('hidden');
     const rows = [...roster.values()].map((r) => ({ ...r, ...(scores.get(r.id) || { score: 0, kills: 0, deaths: 0 }) }));
     rows.sort((a, b) => b.score - a.score || b.kills - a.kills);
-    const row = (r) => `<tr class="${r.id === myId ? 'me' : ''} ${r.alive === false ? 'dead' : ''}"><td>${esc(r.name)}${r.bot ? ' <span class="muted small">bot</span>' : ''}</td><td class="muted small">${RANKS[r.rank]?.name || ''}</td><td class="muted small">${r.hull} / ${r.turret}</td><td class="right"><b>${r.score}</b></td><td class="right">${r.kills}</td><td class="right">${r.deaths}</td></tr>`;
+    const row = (r) => `<tr class="${r.id === myId ? 'me' : ''} ${r.alive === false ? 'dead' : ''}"><td>${r.clan ? `<span class="muted small">[${esc(r.clan)}]</span> ` : ''}${esc(r.name)}${r.bot ? ' <span class="muted small">bot</span>' : ''}</td><td class="muted small">${RANKS[r.rank]?.name || ''}</td><td class="muted small">${r.hull} / ${r.turret}</td><td class="right"><b>${r.score}</b></td><td class="right">${r.kills}</td><td class="right">${r.deaths}</td></tr>`;
     const head = `<tr><th>Player</th><th>Rank</th><th>Setup</th><th class="right">Score</th><th class="right">Kills</th><th class="right">Deaths</th></tr>`;
     let body;
     if (this.teams) {

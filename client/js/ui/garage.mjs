@@ -2,6 +2,9 @@
 import * as THREE from 'three';
 import { HULLS, TURRETS, PAINTS, SUPPLIES, hullStats, turretStats, upgradePrice, upgradeRank, rankForXp, RANKS, MAX_MOD, getHull, getTurret, getPaint } from '/shared/items.mjs';
 import { buildTank } from '../render/tankmesh.mjs';
+import { DRONES, getDrone } from '/shared/drones.mjs';
+import { AUGMENTS, getAugment, augmentsFor } from '/shared/augments.mjs';
+import { CONTAINER_XP, MISSIONS_PER_CONTAINER } from '/shared/constants.mjs';
 import { buildSky, HDRI_FOR } from '../render/sky.mjs';
 import { Textures } from '../render/textures.mjs';
 import { Assets } from '../render/assets.mjs';
@@ -109,10 +112,20 @@ export class Garage {
 
   open(fromBattle) {
     this.fromBattle = fromBattle;
-    const e = this.app.profile.equipped;
-    this.selected = this.tab === 'hull' ? e.hull : this.tab === 'turret' ? e.turret : this.tab === 'paint' ? e.paint : 'repair';
+    this.selected = this.defaultSelection(this.tab);
     if (!fromBattle && !this.app.showroom.built) this.app.showroom.build(this.app.equip());
     this.render();
+  }
+
+  defaultSelection(tab) {
+    const p = this.app.profile, e = p.equipped;
+    if (tab === 'hull') return e.hull;
+    if (tab === 'turret') return e.turret;
+    if (tab === 'paint') return e.paint;
+    if (tab === 'drone') return e.drone || DRONES[0].id;
+    if (tab === 'augment') return p.augments[e.turret] || (augmentsFor(e.turret)[0] || AUGMENTS[0]).id;
+    if (tab === 'container') return 'containers';
+    return 'repair';
   }
 
   previewEquip() {
@@ -128,16 +141,18 @@ export class Garage {
     const rank = rankForXp(p.xp).index;
     const owned = (kind, id) => kind === 'hull' ? p.hulls[id] != null : kind === 'turret' ? p.turrets[id] != null : kind === 'paint' ? p.paints.includes(id) : true;
     const modOf = (kind, id) => kind === 'hull' ? p.hulls[id] | 0 : p.turrets[id] | 0;
-    const tabs = [['hull', 'Hulls'], ['turret', 'Turrets'], ['paint', 'Paints'], ['supply', 'Supplies']];
-    const list = this.tab === 'hull' ? HULLS : this.tab === 'turret' ? TURRETS : this.tab === 'paint' ? PAINTS : SUPPLIES;
+    const tabs = [['hull', 'Hulls'], ['turret', 'Turrets'], ['paint', 'Paints'], ['supply', 'Supplies'], ['drone', 'Drones'], ['augment', 'Augments'], ['container', `Containers${(p.containers | 0) > 0 ? ` (${p.containers})` : ''}`]];
+    const augList = AUGMENTS.filter((a) => p.turrets[a.turret] != null).concat(AUGMENTS.filter((a) => p.turrets[a.turret] == null));
+    const list = this.tab === 'hull' ? HULLS : this.tab === 'turret' ? TURRETS : this.tab === 'paint' ? PAINTS : this.tab === 'drone' ? DRONES : this.tab === 'augment' ? augList : this.tab === 'container' ? [{ id: 'containers', name: 'Containers', color: 0xc9a227 }] : SUPPLIES;
     const item = (it) => {
       const kind = this.tab;
-      const own = owned(kind, it.id);
-      const eq = kind === 'hull' ? p.equipped.hull === it.id : kind === 'turret' ? p.equipped.turret === it.id : kind === 'paint' ? p.equipped.paint === it.id : false;
+      const own = kind === 'drone' ? !!p.drones[it.id] : kind === 'augment' ? p.augmentsOwned.includes(it.id) : kind === 'container' ? true : owned(kind, it.id);
+      const eq = kind === 'hull' ? p.equipped.hull === it.id : kind === 'turret' ? p.equipped.turret === it.id : kind === 'paint' ? p.equipped.paint === it.id : kind === 'drone' ? p.equipped.drone === it.id : kind === 'augment' ? p.augments[it.turret] === it.id : false;
       const locked = !own && rank < (it.rank || 0);
-      const sw = kind === 'paint' ? `background:${hex(it.color)}` : kind === 'supply' ? `background:${hex(it.color)}` : `background:linear-gradient(135deg, ${hex((it.color || 0x6b8e3a))}, #223)`;
-      const tag = kind === 'supply' ? `<span class="tag">${p.supplies[it.id] | 0}</span>` : eq ? '<span class="tag equipped">Equipped</span>' : own ? (kind !== 'paint' ? `<span class="tag">M${modOf(kind, it.id)}</span>` : '<span class="tag">Owned</span>') : locked ? `<span class="tag">Rank ${it.rank}</span>` : `<span class="tag price">${it.price}</span>`;
-      return `<div class="item-card ${this.selected === it.id ? 'selected' : ''} ${locked ? 'locked' : ''}" data-id="${it.id}"><div class="swatch" style="${sw}"></div><div><div class="title">${esc(it.name)}</div><div class="sub">${kind === 'turret' ? esc(it.kind) : kind === 'hull' ? `${it.hp} armor · ${it.speed} m/s` : kind === 'paint' ? esc(Object.keys(it.resist).length ? 'Resists: ' + Object.entries(it.resist).map(([k, v]) => `${getTurret(k).name} ${Math.round(v * 100)}%`).join(', ') : 'No resistances') : `${it.price} crystals each`}</div></div>${tag}</div>`;
+      const sw = kind === 'paint' || kind === 'supply' || kind === 'drone' || kind === 'container' ? `background:${hex(it.color)}` : kind === 'augment' ? `background:linear-gradient(135deg, ${hex(getTurret(it.turret).color)}, #223)` : `background:linear-gradient(135deg, ${hex((it.color || 0x6b8e3a))}, #223)`;
+      const tag = kind === 'supply' ? `<span class="tag">${p.supplies[it.id] | 0}</span>` : kind === 'container' ? `<span class="tag">${p.containers | 0}</span>` : eq ? '<span class="tag equipped">Equipped</span>' : own ? (kind === 'hull' || kind === 'turret' ? `<span class="tag">M${modOf(kind, it.id)}</span>` : '<span class="tag">Owned</span>') : locked ? `<span class="tag">Rank ${it.rank}</span>` : `<span class="tag price">${it.price}</span>`;
+      const sub = kind === 'turret' ? esc(it.kind) : kind === 'hull' ? `${it.hp} armor · ${it.speed} m/s` : kind === 'paint' ? esc(Object.keys(it.resist).length ? 'Resists: ' + Object.entries(it.resist).map(([k, v]) => `${getTurret(k).name} ${Math.round(v * 100)}%`).join(', ') : 'No resistances') : kind === 'drone' ? esc(it.desc.split('.')[0]) : kind === 'augment' ? `${esc(getTurret(it.turret).name)}${p.turrets[it.turret] == null ? ' · turret not owned' : ''}` : kind === 'container' ? 'Loot boxes from missions, experience and first wins' : `${it.price} crystals each`;
+      return `<div class="item-card ${this.selected === it.id ? 'selected' : ''} ${locked ? 'locked' : ''}" data-id="${it.id}"><div class="swatch" style="${sw}"></div><div><div class="title">${esc(it.name)}</div><div class="sub">${sub}</div></div>${tag}</div>`;
     };
     this.$('screen-garage').innerHTML = `${app.screens.topbar()}
       <div class="garage-body">
@@ -149,7 +164,7 @@ export class Garage {
         <div class="garage-center"><div class="hint">${this.fromBattle ? 'Changes apply when you respawn' : 'Your tank'}</div></div>
         <div class="garage-right" id="garage-details"></div>
       </div>`;
-    for (const b of this.$('screen-garage').querySelectorAll('.garage-tabs button')) b.onclick = () => { this.tab = b.dataset.tab; const e = p.equipped; this.selected = this.tab === 'hull' ? e.hull : this.tab === 'turret' ? e.turret : this.tab === 'paint' ? e.paint : 'repair'; app.audio.play('click'); this.render(); };
+    for (const b of this.$('screen-garage').querySelectorAll('.garage-tabs button')) b.onclick = () => { this.tab = b.dataset.tab; this.selected = this.defaultSelection(this.tab); app.audio.play('click'); this.render(); };
     for (const el of this.$('garage-list').querySelectorAll('.item-card')) el.onclick = () => { this.selected = el.dataset.id; app.audio.play('click'); this.render(); };
     this.$('garage-back').onclick = () => { app.audio.play('click'); if (this.fromBattle) app.showScreen('pause'); else app.showScreen('menu'); };
     this.renderDetails();
@@ -227,6 +242,48 @@ export class Garage {
         this.$('g-buy')?.addEventListener('click', () => app.garageOp('buy', 'paint', id));
         this.$('g-equip')?.addEventListener('click', () => app.garageOp('equip', 'paint', id));
       };
+    } else if (kind === 'drone') {
+      const it = getDrone(id) || DRONES[0];
+      const own = !!p.drones[it.id], equipped = p.equipped.drone === it.id;
+      html += `<h2>${esc(it.name)} drone</h2><p class="muted small">${esc(it.desc)}</p>`;
+      html += `<div class="swatch" style="width:100%;height:40px;border-radius:8px;background:linear-gradient(135deg, ${hex(it.color)}, #223);border:1px solid rgba(255,255,255,0.15)"></div>`;
+      html += `<div class="stat"><span>Rank required</span><span><b>${RANKS[it.rank].name}</b></span></div>`;
+      if (!own) {
+        const can = rank >= it.rank && p.crystals >= it.price;
+        html += `<div class="stat"><span>Price</span><span class="crystals">${it.price}</span></div>` + btn(rank < it.rank ? `Requires ${RANKS[it.rank].name}` : p.crystals < it.price ? 'Not enough crystals' : 'Buy', '', !can, null, 'g-buy');
+      } else if (!equipped) html += btn('Equip', '', false, null, 'g-equip');
+      else html += btn('Equipped', 'secondary', true, null, 'x') + btn('Remove drone', 'secondary', false, null, 'g-unequip');
+      html += `<p class="muted small" style="margin-top:10px">One drone flies with your tank and works automatically. Drones also drop from containers.</p>`;
+      wire = () => {
+        this.$('g-buy')?.addEventListener('click', () => app.garageOp('buyDrone', 'drone', it.id));
+        this.$('g-equip')?.addEventListener('click', () => app.garageOp('equipDrone', 'drone', it.id));
+        this.$('g-unequip')?.addEventListener('click', () => app.garageOp('equipDrone', 'drone', null));
+      };
+    } else if (kind === 'augment') {
+      const it = getAugment(id) || AUGMENTS[0];
+      const turret = getTurret(it.turret);
+      const own = p.augmentsOwned.includes(it.id), equipped = p.augments[it.turret] === it.id, hasTurret = p.turrets[it.turret] != null;
+      html += `<h2>${esc(it.name)}</h2><div class="muted small">Augment for the <b>${esc(turret.name)}</b></div><p class="muted small" style="margin-top:6px">${esc(it.desc)}</p>`;
+      html += `<div class="stat"><span>Rank required</span><span><b>${RANKS[it.rank].name}</b></span></div>`;
+      if (!own) {
+        const can = hasTurret && rank >= it.rank && p.crystals >= it.price;
+        html += `<div class="stat"><span>Price</span><span class="crystals">${it.price}</span></div>` + btn(!hasTurret ? `Buy the ${turret.name} first` : rank < it.rank ? `Requires ${RANKS[it.rank].name}` : p.crystals < it.price ? 'Not enough crystals' : 'Buy', '', !can, null, 'g-buy');
+      } else if (!equipped) html += btn('Equip', '', false, null, 'g-equip');
+      else html += btn('Equipped', 'secondary', true, null, 'x') + btn('Remove augment', 'secondary', false, null, 'g-unequip');
+      html += `<p class="muted small" style="margin-top:10px">One augment per turret. It is active whenever that turret is mounted. Augments also drop from containers.</p>`;
+      wire = () => {
+        this.$('g-buy')?.addEventListener('click', () => app.garageOp('buyAugment', 'turret', it.id));
+        this.$('g-equip')?.addEventListener('click', () => app.garageOp('equipAugment', it.turret, it.id));
+        this.$('g-unequip')?.addEventListener('click', () => app.garageOp('equipAugment', it.turret, null));
+      };
+    } else if (kind === 'container') {
+      const n = p.containers | 0, xp = p.containerXp | 0;
+      html += `<h2>Containers</h2><div class="container-art">&#128230;</div>`;
+      html += stat('Ready to open', n) + stat('Opened so far', p.containersOpened | 0);
+      html += `<div class="stat"><span>Next container</span><span><b>${xp} / ${CONTAINER_XP} XP</b></span></div><div class="xp-mini"><div style="width:${Math.min(100, (xp / CONTAINER_XP) * 100).toFixed(0)}%"></div></div>`;
+      html += btn(n > 0 ? 'Open a container' : 'No containers yet', '', n <= 0, null, 'g-open');
+      html += `<p class="muted small" style="margin-top:10px">Earn containers from every ${CONTAINER_XP} experience, every ${MISSIONS_PER_CONTAINER} completed missions and the first win of each day. They hold crystals, supplies, paints, augments and drones.</p>`;
+      wire = () => { this.$('g-open')?.addEventListener('click', () => app.garageOp('openContainer', 'container', null)); };
     } else {
       const it = SUPPLIES.find((s) => s.id === id) || SUPPLIES[0];
       html += `<h2>${esc(it.name)}</h2><p class="muted small">${esc(it.desc)}</p>`;

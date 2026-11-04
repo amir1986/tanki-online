@@ -1,4 +1,5 @@
 // Menu screens: login, main menu, lobby, create battle, settings, pause, results.
+import * as CONST from '/shared/constants.mjs';
 import { RANKS, rankProgress } from '/shared/items.mjs';
 import { MODES, BATTLE_DEFAULTS, GAME_VERSION, TEAM_NAMES } from '/shared/constants.mjs';
 import { buildMap, MAP_LIST } from '/shared/maps.mjs';
@@ -90,8 +91,10 @@ export class Screens {
       <div class="menu-body">
         <div class="menu-main">
           <button class="btn big" id="menu-quick">▶ Play now</button>
+          <div class="chips" id="menu-modes">${['any', 'DM', 'TDM', 'CTF', 'CP', 'JGR', 'RGB', 'SGE'].map((m) => `<button class="chip ${app.queueMode === m ? 'active' : ''}" data-mode="${m}" title="${m === 'any' ? 'Any mode' : esc(CONST.MODES[m].name)}">${m === 'any' ? 'Any' : m}</button>`).join('')}</div>
           <button class="btn secondary big" id="menu-play">Battle list</button>
-          <button class="btn secondary big" id="menu-garage">Garage</button>
+          <button class="btn secondary big" id="menu-garage">Garage${(app.profile.containers | 0) > 0 ? ` <span class="crystals small">&#128230; ${app.profile.containers}</span>` : ''}</button>
+          <button class="btn secondary big" id="menu-clan">Clan${app.profile.clan ? ` <span class="small muted">[${esc(app.profile.clan.tag)}]</span>` : ''}</button>
           <button class="btn secondary big" id="menu-training">Training${app.profile.tutorialDone ? '' : ' <span class="crystals small">+500</span>'}</button>
           <button class="btn secondary big" id="menu-leaderboard">Leaderboard</button>
           <button class="btn secondary big" id="menu-settings">Settings</button>
@@ -105,12 +108,55 @@ export class Screens {
       </div>
       <div class="menu-footer"><span>v${GAME_VERSION}${app.dev ? ' · dev mode (type /help in battle chat)' : ''}</span><span>Battles: ${app.profile.stats.battles} · Wins: ${app.profile.stats.wins} · Kills: ${app.profile.stats.kills} · Flags: ${app.profile.stats.flags} · Gold boxes: ${app.profile.stats.gold}</span></div>`;
     this.$('menu-quick').onclick = () => { app.audio.play('click'); app.quickPlay(); };
+    for (const c of this.$('menu-modes').querySelectorAll('.chip')) c.onclick = () => { app.queueMode = c.dataset.mode; app.audio.play('click'); this.renderMenu(); };
+    this.$('menu-clan').onclick = () => { app.audio.play('click'); app.showScreen('clan'); };
     this.$('menu-play').onclick = () => { app.audio.play('click'); app.showScreen('lobby'); };
     this.$('menu-garage').onclick = () => { app.audio.play('click'); app.showScreen('garage'); };
     this.$('menu-training').onclick = () => { app.audio.play('click'); app.startTraining(); };
     this.$('menu-leaderboard').onclick = () => { app.audio.play('click'); app.showScreen('leaderboard'); };
     this.$('menu-settings').onclick = () => { app.audio.play('click'); app.showScreen('settings'); };
     if (app.isElectron) this.$('menu-exit').onclick = () => app.quit();
+  }
+
+  renderClan() {
+    const app = this.app, info = app.clanInfo || {};
+    const mine = app.clanInfo ? (info.clan || null) : (app.profile.clan || null); // server reply wins over the cached profile
+    const meName = app.profile.name.toLowerCase();
+    const isLeader = !!(mine && mine.leader && mine.leader.toLowerCase() === meName);
+    const members = mine ? mine.members.map((m) => `<tr><td>${esc(m)}${m.toLowerCase() === (mine.leader || '').toLowerCase() ? ' <span class="muted small">leader</span>' : ''}</td><td class="right">${isLeader && m.toLowerCase() !== meName ? `<button class="btn danger small-btn" data-kick="${esc(m)}">Kick</button>` : ''}</td></tr>`).join('') : '';
+    const list = (info.list || []).map((c) => `<tr class="${mine && c.tag === mine.tag ? 'me' : ''}"><td><b>[${esc(c.tag)}]</b></td><td>${esc(c.name)}</td><td class="muted small">${esc(c.leader)}</td><td class="right">${c.members}</td><td class="right">${c.xp}</td><td class="right">${!mine ? `<button class="btn small-btn" data-join="${esc(c.tag)}">Join</button>` : ''}</td></tr>`).join('');
+    this.$('screen-clan').innerHTML = `${this.topbar()}
+      <div class="lobby-body"><div class="panel grow" style="overflow:auto">
+        <h2>Clans</h2>
+        ${mine ? `<h3>[${esc(mine.tag)}] ${esc(mine.name)}</h3><div class="muted small">Leader: ${esc(mine.leader)} · ${mine.members.length} / ${CONST.CLAN_MAX_MEMBERS} members · clan chat: type /c message in battle</div>
+          <div class="scoreboard" style="position:static;transform:none;width:auto;margin-top:8px"><table>${members}</table></div>
+          <div class="row" style="margin-top:10px"><button class="btn danger" id="clan-leave">${isLeader ? 'Leave (disbands if you are the last member)' : 'Leave clan'}</button></div>`
+        : `<div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end">
+            <label class="field">Tag (2–5 letters)<input id="clan-tag" maxlength="5" placeholder="TNK"></label>
+            <label class="field">Name<input id="clan-name" maxlength="24" placeholder="Tank Legends"></label>
+            <button class="btn" id="clan-create" ${app.profile.crystals < CONST.CLAN_CREATE_COST ? 'disabled' : ''}>Found a clan (${CONST.CLAN_CREATE_COST} crystals)</button>
+            <label class="field">Join by tag<input id="clan-join-tag" maxlength="5" placeholder="TAG"></label>
+            <button class="btn secondary" id="clan-join">Join</button>
+          </div>`}
+        <h3 style="margin-top:16px">All clans</h3>
+        <div class="scoreboard" style="position:static;transform:none;width:auto"><table><tr><th>Tag</th><th>Name</th><th>Leader</th><th class="right">Members</th><th class="right">Experience</th><th></th></tr>${list || '<tr><td colspan="6" class="muted">No clans yet — found the first one!</td></tr>'}</table></div>
+        <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn secondary" id="clan-back">Back</button></div>
+      </div></div>`;
+    this.$('clan-back').onclick = () => { app.audio.play('click'); app.showScreen('menu'); };
+    this.$('clan-create')?.addEventListener('click', () => app.clanOp('create', { tag: this.$('clan-tag').value.trim().toUpperCase(), name: this.$('clan-name').value.trim() }));
+    this.$('clan-join')?.addEventListener('click', () => app.clanOp('join', { tag: this.$('clan-join-tag').value.trim().toUpperCase() }));
+    this.$('clan-leave')?.addEventListener('click', () => app.clanOp('leave'));
+    for (const b of this.$('screen-clan').querySelectorAll('[data-join]')) b.onclick = () => app.clanOp('join', { tag: b.dataset.join });
+    for (const b of this.$('screen-clan').querySelectorAll('[data-kick]')) b.onclick = () => app.clanOp('kick', { member: b.dataset.kick });
+  }
+
+  /** Container reward popup. */
+  showReward(reward, left) {
+    const el = document.createElement('div');
+    el.className = 'screen center reward-overlay';
+    el.innerHTML = `<div class="panel reward-box"><h2>Container opened</h2><div class="container-art">&#128230;</div><div class="reward-text">${esc(reward && reward.text ? reward.text : '')}</div><div class="muted small">${left | 0} container${left === 1 ? '' : 's'} left</div><button class="btn" id="reward-ok" style="margin-top:12px">Nice!</button></div>`;
+    document.getElementById('ui').appendChild(el);
+    el.querySelector('#reward-ok').onclick = () => { el.remove(); this.app.audio.play('click'); if (this.app.screen === 'garage') this.app.garage.render(); };
   }
 
   renderLeaderboard() {
@@ -230,6 +276,7 @@ export class Screens {
         <label class="field">Effects: <span id="st-vs-v">${Math.round(s.volSfx * 100)}%</span><input type="range" id="st-vs" min="0" max="1" step="0.05" value="${s.volSfx}"></label>
         <label class="field">Engine: <span id="st-ve-v">${Math.round(s.volEngine * 100)}%</span><input type="range" id="st-ve" min="0" max="1" step="0.05" value="${s.volEngine}"></label>
         <label class="field">Interface: <span id="st-vu-v">${Math.round(s.volUi * 100)}%</span><input type="range" id="st-vu" min="0" max="1" step="0.05" value="${s.volUi}"></label>
+        <label class="field">Music: <span id="st-vmu-v">${Math.round((s.volMusic ?? 0.5) * 100)}%</span><input type="range" id="st-vmu" min="0" max="1" step="0.05" value="${s.volMusic ?? 0.5}"></label>
       </div>
       <div class="row" style="justify-content:flex-end;margin-top:6px"><button class="btn" id="st-back">Done</button></div>
     </div>`;
@@ -239,11 +286,11 @@ export class Screens {
       app.setSettings({
         quality: this.$('st-quality').value, scale: +this.$('st-scale').value, shadows: +this.$('st-shadows').value, bloom: this.$('st-bloom').checked, ao: this.$('st-ao').checked, showFps: this.$('st-fps').checked,
         mouseAim: this.$('st-mouse').checked, invertY: this.$('st-invert').checked, sensitivity: +this.$('st-sens').value,
-        volMaster: +this.$('st-vm').value, volSfx: +this.$('st-vs').value, volEngine: +this.$('st-ve').value, volUi: +this.$('st-vu').value,
+        volMaster: +this.$('st-vm').value, volSfx: +this.$('st-vs').value, volEngine: +this.$('st-ve').value, volUi: +this.$('st-vu').value, volMusic: +this.$('st-vmu').value,
       });
       this.$('st-scale-v').textContent = this.$('st-scale').value;
       this.$('st-sens-v').textContent = this.$('st-sens').value;
-      for (const [id, k] of [['st-vm', 'volMaster'], ['st-vs', 'volSfx'], ['st-ve', 'volEngine'], ['st-vu', 'volUi']]) this.$(id + '-v').textContent = Math.round(app.settings[k] * 100) + '%';
+      for (const [id, k] of [['st-vm', 'volMaster'], ['st-vs', 'volSfx'], ['st-ve', 'volEngine'], ['st-vu', 'volUi'], ['st-vmu', 'volMusic']]) this.$(id + '-v').textContent = Math.round(app.settings[k] * 100) + '%';
     };
     this.$('st-quality').onchange = () => {
       const q = this.$('st-quality').value;
@@ -251,7 +298,7 @@ export class Screens {
       this.$('st-scale').value = preset[0]; this.$('st-shadows').value = String(preset[1]); this.$('st-bloom').checked = preset[2]; this.$('st-ao').checked = preset[3];
       apply();
     };
-    for (const id of ['st-scale', 'st-shadows', 'st-bloom', 'st-ao', 'st-fps', 'st-mouse', 'st-invert', 'st-sens', 'st-vm', 'st-vs', 'st-ve', 'st-vu']) this.$(id).oninput = () => { if (id !== 'st-quality') { apply(); } };
+    for (const id of ['st-scale', 'st-shadows', 'st-bloom', 'st-ao', 'st-fps', 'st-mouse', 'st-invert', 'st-sens', 'st-vm', 'st-vs', 'st-ve', 'st-vu', 'st-vmu']) this.$(id).oninput = () => { if (id !== 'st-quality') { apply(); } };
     this.$('st-back').onclick = () => { app.audio.play('click'); app.showScreen(backTo); };
   }
 

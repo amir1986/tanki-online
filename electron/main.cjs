@@ -47,6 +47,8 @@ function createWindow(port) {
       try {
         const dir = path.join(process.cwd(), 'screenshots');
         fs.mkdirSync(dir, { recursive: true });
+        const js64 = (argv.find((a) => a.startsWith('--smoke-js64=')) || '').slice(13);
+        if (js64) { await win.webContents.executeJavaScript(Buffer.from(js64, 'base64').toString('utf8')); await new Promise((r) => setTimeout(r, +(process.env.SMOKE_AFTER || 2500))); }
         const img = await win.webContents.capturePage();
         const name = (argv.find((a) => a.startsWith('--out=')) || '').slice(6) || `smoke-${has('--smoke-battle') ? 'battle' : 'menu'}.png`;
         fs.writeFileSync(path.join(dir, name), img.toPNG());

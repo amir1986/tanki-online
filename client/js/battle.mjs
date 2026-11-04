@@ -5,6 +5,7 @@ import { finalizeMap } from '/shared/sim/nav.mjs';
 import { unpackTank, PS, DS, MS, DROP_TYPES, C2S } from '/shared/protocol.mjs';
 import { TF, TEAM_NAMES, MODES, RESPAWN_DELAY, SUPPLY_COOLDOWN, MINE_COOLDOWN } from '/shared/constants.mjs';
 import { getTurret, getHull, getSupply, RANKS, hullStats } from '/shared/items.mjs';
+import { getDrone } from '/shared/drones.mjs';
 import { qToYaw, angleDiff } from '/shared/sim/math.mjs';
 import { buildTerrain } from './render/terrain.mjs';
 import { buildSky } from './render/sky.mjs';
@@ -40,8 +41,30 @@ function refreshNameplate(obj, r, isMe, hpFrac, jugger) {
   const el = obj.userData.el;
   el.className = 'nameplate' + (jugger ? ' jug' : isMe ? ' me' : r.team === 1 ? ' r' : r.team === 2 ? ' b' : '');
   const rank = r.rank != null && RANKS[r.rank] ? RANKS[r.rank].name.split(' ')[0].slice(0, 10) : '';
-  el.innerHTML = `<span class="nm">${jugger ? '&#9819; ' : ''}${rank ? `<span class="rk">${esc(rank)}</span>` : ''}${esc(r.name)}</span><div class="hp"><i style="width:${Math.round(hpFrac * 100)}%"></i></div>`;
+  el.innerHTML = `<span class="nm">${jugger ? '&#9819; ' : ''}${r.clan ? `<span class="rk">[${esc(r.clan)}]</span>` : ''}${rank ? `<span class="rk">${esc(rank)}</span>` : ''}${esc(r.name)}</span><div class="hp"><i style="width:${Math.round(hpFrac * 100)}%"></i></div>`;
   obj.userData.hp = el.querySelector('.hp i');
+}
+
+/** Small support drone hovering beside a tank. */
+function buildDroneMesh(color) {
+  const g = new THREE.Group();
+  const dark = new THREE.MeshStandardMaterial({ color: 0x2e3338, roughness: 0.6, metalness: 0.6 });
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.12, 0.42), dark));
+  const rotors = new THREE.Group();
+  for (const [x, z] of [[-0.28, -0.28], [0.28, -0.28], [-0.28, 0.28], [0.28, 0.28]]) {
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.06), dark);
+    arm.position.set(x / 2, 0, z / 2); arm.rotation.y = -Math.atan2(z, x); g.add(arm);
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.01, 12), new THREE.MeshBasicMaterial({ color: 0x9aa3ad, transparent: true, opacity: 0.35 }));
+    disc.position.set(x, 0.05, z); rotors.add(disc);
+  }
+  g.add(rotors);
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 2 }));
+  eye.position.set(0, -0.02, 0.22); g.add(eye);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: Textures.get('particle'), color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.5 }));
+  glow.scale.set(0.8, 0.8, 1); g.add(glow);
+  g.userData.rotors = rotors;
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
 }
 
 export class BattleClient {
@@ -211,11 +234,13 @@ export class BattleClient {
         const aura = new THREE.Mesh(new THREE.SphereGeometry(Math.max(...mesh.size) * 0.75, 18, 12), new THREE.MeshBasicMaterial({ color: 0x4da6ff, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false }));
         aura.visible = false;
         mesh.group.add(aura);
-        t = { id: r.id, mesh, label, aura, hull: r.hull, turret: r.turret, paint: r.paint, team: r.team, name: r.name, rank: r.rank, state: null, prev: null, visible: false, lastHp: -1, pos: new THREE.Vector3(), yaw: 0, turretYaw: 0, speed: 0, up: [0, 1, 0], tsize: mesh.size };
+        t = { id: r.id, mesh, label, aura, hull: r.hull, turret: r.turret, paint: r.paint, team: r.team, name: r.name, rank: r.rank, clan: r.clan || null, drone: null, droneObj: null, state: null, prev: null, visible: false, lastHp: -1, pos: new THREE.Vector3(), yaw: 0, turretYaw: 0, speed: 0, up: [0, 1, 0], tsize: mesh.size };
+        if (r.drone) this.attachDrone(t, r.drone);
         this.tanks.set(r.id, t);
-      } else if (t.team !== r.team || t.name !== r.name || t.rank !== r.rank) {
-        t.team = r.team; t.name = r.name; t.rank = r.rank;
+      } else if (t.team !== r.team || t.name !== r.name || t.rank !== r.rank || t.clan !== (r.clan || null) || t.drone !== (r.drone || null)) {
+        t.team = r.team; t.name = r.name; t.rank = r.rank; t.clan = r.clan || null;
         t.mesh.setTeam(r.team);
+        if (t.drone !== (r.drone || null)) this.attachDrone(t, r.drone || null);
         refreshNameplate(t.label, r, r.id === this.myId, Math.max(0, t.lastHp), !!t.jugger);
       }
       t.maxHp = r.maxHp;
@@ -226,11 +251,24 @@ export class BattleClient {
     }
   }
 
+  /** Attach (or remove, with null) the hovering drone of a tank. */
+  attachDrone(t, droneId) {
+    if (t.droneObj) { t.mesh.group.remove(t.droneObj); t.droneObj = null; }
+    t.drone = droneId || null;
+    const d = getDrone(droneId);
+    if (!d) return;
+    const obj = buildDroneMesh(d.color);
+    obj.position.set(-t.tsize[0] / 2 - 0.55, t.tsize[1] / 2 + 1.25, -t.tsize[2] * 0.25);
+    obj.userData.baseY = obj.position.y;
+    t.mesh.group.add(obj);
+    t.droneObj = obj;
+  }
+
   // ---- snapshots ----------------------------------------------------------------------
   onSnapshot(m) {
     const tanks = new Map();
     for (const a of m.tanks) { const u = unpackTank(a); tanks.set(u.id, u); }
-    const snap = { time: m.time, tanks, pr: m.pr, dr: m.dr, mn: m.mn, fl: m.fl, cp: m.cp, ts: m.ts, sc: m.sc, left: m.left, st: m.st };
+    const snap = { time: m.time, tanks, pr: m.pr, dr: m.dr, mn: m.mn, fl: m.fl, cp: m.cp, ts: m.ts, sc: m.sc, left: m.left, st: m.st, bl: m.bl, sg: m.sg };
     this.snaps.push(snap);
     while (this.snaps.length > 12) this.snaps.shift();
     if (this.snaps.length === 1) this.renderTime = m.time - INTERP;
@@ -463,6 +501,38 @@ export class BattleClient {
         else hud.killfeed(`${this.nameHtml(e.p)} <span class="muted">was promoted to</span> ${esc(RANKS[e.r]?.name || '')}`);
         break;
       }
+      case 'ball': {
+        if (e.a === 'goal') {
+          hud.notify(`GOAL! ${this.nameOf(e.p)} scored for the ${TEAM_NAMES[e.team]} team`, e.team === this.me.team ? 'good' : 'bad');
+          hud.killfeed(`${this.nameHtml(e.p)} <span class="k">scored a goal</span>`);
+          au.play('flag');
+          if (this.ballMesh) fx.pickupBurst([this.ballMesh.position.x, this.ballMesh.position.y, this.ballMesh.position.z], 0xffd080);
+        } else if (e.a === 'taken') {
+          hud.notify(this.isMe(e.p) ? 'You have the ball! Drive it into the enemy goal (fire to throw)' : `${this.nameOf(e.p)} took the ball`, this.isMe(e.p) || this.teamOf(e.p) === this.me.team ? 'good' : 'bad');
+          au.play(this.isMe(e.p) ? 'pickup' : 'cp', null, 0.6);
+        } else if (e.a === 'thrown') au.play('bounce', null, 0.6);
+        else if (e.a === 'dropped') hud.notify('The ball is loose', '');
+        else if (e.a === 'reset') hud.notify('Ball reset to the centre', '');
+        break;
+      }
+      case 'siege': {
+        const att = TEAM_NAMES[e.team];
+        if (e.a === 'start') hud.notify(`Round ${e.round}: ${att} team attacks${e.team === this.me.team ? ' — capture the point!' : ' — hold the point!'}`, 'gold');
+        else if (e.a === 'captured') hud.notify(`${att} team captured the point!`, e.team === this.me.team ? 'good' : 'bad');
+        else if (e.a === 'held') hud.notify(`${att} team held the point!`, e.team === this.me.team ? 'good' : 'bad');
+        au.play(e.a === 'start' ? 'countdown' : 'cp');
+        break;
+      }
+      case 'drone': {
+        const pos = this.tankPos(e.p);
+        if (pos) fx.healSparks(pos);
+        if (this.isMe(e.p)) { hud.notify(`${(getDrone(e.id) || { name: 'Drone' }).name} drone activated`, 'good'); au.play('heal', null, 0.7); }
+        break;
+      }
+      case 'container': {
+        if (this.isMe(e.p)) { hud.notify(`You earned a container (${e.why}) — open it in the garage`, 'gold'); au.play('gold'); }
+        break;
+      }
       case 'sys': hud.chat({ sys: true, msg: e.m }); break;
       case 'chat': hud.chat({ name: e.n, team: e.tm, msg: e.m, teamOnly: e.to === 'team', me: this.isMe(e.p) }); if (!this.isMe(e.p)) au.play('chat'); break;
       case 'sd': if (this.isMe(e.p)) { hud.notify('Self-destruct!', 'bad'); au.play('sd'); } break;
@@ -634,6 +704,23 @@ export class BattleClient {
       }
     }
 
+    // rugby ball: carried above its carrier, otherwise interpolated between snapshots
+    if (this.ballMesh) {
+      const bl = latest.bl;
+      if (!bl) this.ballMesh.visible = false;
+      else {
+        this.ballMesh.visible = true;
+        const ct = bl[3] >= 0 ? this.tanks.get(bl[3]) : null;
+        if (ct && ct.visible) this.ballMesh.position.set(ct.pos.x, ct.pos.y + ct.tsize[1] / 2 + 1.0 + Math.sin(this.now * 4) * 0.1, ct.pos.z);
+        else { const ba = a.bl || bl, bb = b.bl || bl; this.ballMesh.position.set(ba[0] + (bb[0] - ba[0]) * alpha, ba[1] + (bb[1] - ba[1]) * alpha, ba[2] + (bb[2] - ba[2]) * alpha); }
+        this.ballMesh.userData.ball.rotation.y += dt * 2;
+      }
+    }
+    // siege point moves between rounds
+    if (this.mode === 'SGE' && latest.sg && this.points[0]) this.points[0].g.position.set(latest.sg[3], latest.sg[4], latest.sg[5]);
+    // drones hover beside their tanks
+    for (const t of this.tanks.values()) if (t.droneObj && t.visible) { t.droneObj.position.y = t.droneObj.userData.baseY + Math.sin(this.now * 3 + t.id) * 0.12; t.droneObj.userData.rotors.rotation.y += dt * 25; }
+
     // local player / camera
     const me = this.me;
     const meTank = this.tanks.get(this.myId);
@@ -686,6 +773,13 @@ export class BattleClient {
       const jr = [...this.roster.values()].find((r) => r.jugger);
       const jt = jr ? this.tanks.get(jr.id) : null;
       this.hud.setObjectives('JGR', null, null, me.team, this.roster, jr ? { name: jr.name, hp: jt && jt.state ? jt.state.hp : 0, maxHp: jr.maxHp, me: jr.id === this.myId } : null);
+    } else if (this.mode === 'RGB') {
+      const bl = latest.bl;
+      const carrier = bl && bl[3] >= 0 ? this.roster.get(bl[3]) : null;
+      this.hud.setObjectives('RGB', null, null, me.team, this.roster, { carrierName: carrier ? carrier.name : null, carrierTeam: carrier ? carrier.team : 0, loose: !!bl && !carrier, me: !!carrier && carrier.id === this.myId });
+    } else if (this.mode === 'SGE') {
+      const sg = latest.sg;
+      this.hud.setObjectives('SGE', null, this.points, me.team, this.roster, sg ? { attacker: sg[0], round: sg[1], left: sg[2], myTeam: me.team } : null);
     } else this.hud.setObjectives(this.mode, b.fl, this.points, me.team, this.roster);
     if (this.tutorial) this.tutorial.update(dt);
     const status = [];
@@ -693,6 +787,7 @@ export class BattleClient {
     if (f & TF.DD) status.push({ cls: 'dd', text: 'Double damage' });
     if (f & TF.NITRO) status.push({ cls: 'nitro', text: 'Nitro' });
     if (f & TF.FLAG) status.push({ cls: 'flag', text: 'Carrying the flag — bring it home!' });
+    if (this.mode === 'RGB' && latest.bl && latest.bl[3] === this.myId) status.push({ cls: 'flag', text: 'You have the ball — drive it into the enemy goal! Fire to throw' });
     if (f & TF.PROTECTED) status.push({ cls: '', text: 'Spawn protection' });
     if (f & TF.FROZEN) status.push({ cls: 'da', text: 'Frozen' });
     if (f & TF.BURNING) status.push({ cls: 'dd', text: 'Burning' });

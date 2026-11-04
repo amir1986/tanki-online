@@ -70,6 +70,9 @@ export class Input {
 
   onKey(e, down) {
     const code = e.code;
+    // typing in a menu text field (clan tag, nickname...) must never be eaten by key bindings
+    const tgt = e.target;
+    if (!this.textFocus && tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable)) return;
     if (this.textFocus) {
       if (down && code === 'Escape') { e.preventDefault(); this.fire('chatCancel'); }
       return;

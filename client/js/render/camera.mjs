@@ -45,7 +45,7 @@ export class FollowCamera {
   addShake(k) { this.shake = Math.min(1.2, this.shake + k); }
 
   /** Free distance from `from` along `dir`, limited by props (raycast) and the terrain (marched through the map). */
-  freeDistance(from, dir, want, map) {
+  freeDistance(from, dir, want, map, useBounds = true) {
     let free = want;
     if (this.occluders.length) {
       raycaster.set(from, dir);
@@ -54,7 +54,7 @@ export class FollowCamera {
       const hits = raycaster.intersectObjects(this.occluders, false);
       if (hits.length && hits[0].distance < free) free = Math.max(1.2, hits[0].distance - 0.45);
     }
-    if (this.bounds) {
+    if (this.bounds && useBounds) {
       // arena walls as analytic planes: the arm stops short of them, which also makes the camera rise when cornered
       for (const [axis, bound] of [['x', this.bounds.x], ['z', this.bounds.z]]) {
         const v = dir[axis];
@@ -98,7 +98,8 @@ export class FollowCamera {
         const p = Math.min(1.25, this.pitch + extra);
         const cp = Math.cos(p), sp = Math.sin(p);
         dirV.set(-Math.sin(yaw) * cp, sp, -Math.cos(yaw) * cp).normalize();
-        const free = this.freeDistance(lookAt, dirV, want, map);
+        // walls do not count here: rising never clears a wall, so cornered views pull in instead of going top-down
+        const free = this.freeDistance(lookAt, dirV, want, map, false);
         if (free >= want * 0.8) { chosen = extra; break; }
         if (free > bestFree + 0.5) { bestFree = free; bestExtra = extra; }
       }

@@ -1,0 +1,12 @@
+{
+  "license": "CC0 1.0",
+  "source": "https://opengameart.org",
+  "menu": [
+    { "file": "chill_main_menu.ogg", "title": "Chill Main Menu Music", "author": "WeaponGuy", "page": "https://opengameart.org/content/chill-main-menu-music" }
+  ],
+  "battle": [
+    { "file": "battle_theme_a.mp3", "title": "Battle Theme A", "author": "JaidynReiman", "page": "https://opengameart.org/content/battle-theme-a" },
+    { "file": "let_the_games_begin.ogg", "title": "Let the Games Begin", "author": "Tozan", "page": "https://opengameart.org/content/let-the-games-begin-0" },
+    { "file": "the_rush.mp3", "title": "The Rush", "author": "tebruno99", "page": "https://opengameart.org/content/the-rush" }
+  ]
+}
